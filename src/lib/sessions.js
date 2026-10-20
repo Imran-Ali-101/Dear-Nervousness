@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { scoped, currentUserId } from './userScope';
+import { analyzeSession } from './analysis';
+import { hasGeminiKey } from './apiKey';
 
 const KEY = 'dn_sessions';
 const MAX = 100;
@@ -68,15 +70,30 @@ const doSync = async () => {
   if (!currentUserId()) return;
   const { data, error } = await supabase.from('sessions').select(COLS).order('started_at', { ascending: false }).limit(MAX);
   if (error) { console.error('Session download failed:', error.message); return; }
-  const remote = data.map(fromRow);
+
+  const local = read();
+  const localBy = new Map(local.map((s) => [s.startedAt, s]));
+  const repaired = [];
+  const remote = data.map(fromRow).map((r) => {
+    const mine = localBy.get(r.startedAt);
+    if (!r.analysis && mine?.analysis) {   // server lacks it: keep ours and send it up again
+      const merged = { ...r, analysis: mine.analysis };
+      repaired.push(merged);
+      return merged;
+    }
+    return r;
+  });
   const have = new Set(remote.map((s) => s.startedAt));
-  const localOnly = read().filter((s) => !have.has(s.startedAt));
-  if (localOnly.length) {
-    const { error: upErr } = await supabase.from('sessions').upsert(localOnly.map(toRow), { onConflict: 'user_id,started_at' });
+  const localOnly = local.filter((s) => !have.has(s.startedAt));
+  const upload = [...localOnly, ...repaired];
+  if (upload.length) {
+    const { error: upErr } = await supabase.from('sessions').upsert(upload.map(toRow), { onConflict: 'user_id,started_at' });
     if (upErr) console.error('Session upload failed:', upErr.message);
   }
   write([...remote, ...localOnly]);
+  analyzePending();   // finish any analysis that was cut off
 };
+
 export const syncSessions = () => {
   if (!inflight) inflight = doSync().finally(() => { inflight = null; });
   return inflight;
@@ -127,4 +144,29 @@ export const getStreak = (list = getSessions()) => {
     d.setDate(d.getDate() - 1);
   }
   return count;
+};
+
+// ---- Analysis that survives a refresh ----
+const analyzing = new Set();   // each session is tried once per page load
+
+const pickModel = () => {
+  try { return localStorage.getItem('dn_model') || import.meta.env.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite'; }
+  catch { return 'gemini-3.1-flash-lite'; }
+};
+
+export const runAnalysis = async (startedAt, { model, language, turns }) => {
+  if (analyzing.has(startedAt)) return;
+  analyzing.add(startedAt);
+  const analysis = await analyzeSession({ model, language, turns });
+  if (analysis) updateSession(startedAt, { analysis });
+};
+
+// Sessions of the last 24h that have a conversation but no finished analysis
+export const analyzePending = async () => {
+  if (!hasGeminiKey() || !currentUserId()) return;
+  const todo = read().filter((s) =>
+    !s.analysis?.summary &&
+    Date.now() - s.startedAt < 864e5 &&
+    Array.isArray(s.turns) && s.turns.some((t) => t.userText));
+  for (const s of todo) await runAnalysis(s.startedAt, { model: pickModel(), language: s.language, turns: s.turns });
 };

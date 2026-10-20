@@ -14,6 +14,7 @@ import TongueTwister from './pages/TongueTwister';
 import Settings from './pages/Settings';
 import Account from './pages/Account';
 import QuotaDialog from './components/QuotaDialog';
+import Report from './pages/Report';
 
 // Full-screen pages (no tabs) replay the enter animation when they mount
 const Page = ({ children }) => <div className="anim-page">{children}</div>;
@@ -41,6 +42,7 @@ function App() {
                 <Route path="/onboarding" element={<Page><Onboarding /></Page>} />
                 <Route path="/warmup" element={<Page><TongueTwister /></Page>} />
                 <Route path="/practice" element={<Page><PracticeSession /></Page>} />
+                <Route path="/report/:startedAt" element={<Page><Report /></Page>} />
                 <Route path="/settings" element={<Page><Settings /></Page>} />
                 <Route path="/settings/account" element={<Page><Account /></Page>} />
               </Route>

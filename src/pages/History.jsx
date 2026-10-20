@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLightbulb, faChevronDown, faFolderOpen } from '@fortawesome/free-solid-svg-icons';
 import { TYPES } from '../lib/practiceOptions';
 import { useSessions } from '../lib/sessions';
+import { Link } from 'react-router-dom';
 
 export default function History() {
   const sessions = useSessions();
@@ -43,7 +44,11 @@ export default function History() {
 
               {isOpen && (
                 <div className="border-t border-gray-100 bg-gray-50/60 p-3 md:p-5">
-                  {s.analysis?.summary && (
+                    {s.analysis && (
+                      <Link to={`/report/${s.startedAt}`} className="mb-3 block text-xs font-bold text-blue-600 hover:underline">View full report →</Link>
+                    )}
+                    
+                    {s.analysis?.summary && (
                     <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900 md:text-sm">
                       <p>{s.analysis.summary}</p>
                       {s.analysis.pausesPerMin != null && (

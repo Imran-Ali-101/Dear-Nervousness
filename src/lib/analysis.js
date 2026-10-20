@@ -54,6 +54,8 @@ ${convo}`;
       generationConfig: { responseMimeType: 'application/json' },
     });
     const a = parseJson(raw);
+    if (!a.summary) console.warn('Analysis response had no summary:', raw.slice(0, 300));
+    
     result.confidence = score(a.confidence);
     result.clarity = score(a.clarity);
     result.grammar = score(a.grammar);

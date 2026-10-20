@@ -13,11 +13,10 @@ import useGeminiModels from '../hooks/useGeminiModels';
 import Dropdown from '../components/Dropdown';
 import { LANGUAGES, PERSONAS, LEVELS, TYPES, VOICES } from '../lib/practiceOptions';
 import { hasGeminiKey } from '../lib/apiKey';
-import { addSession, updateSession } from '../lib/sessions';
+import { addSession, updateSession, runAnalysis } from '../lib/sessions';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayName } from '../lib/profile';
 import { buildPrompt, buildGreeting } from '../lib/prompts';
-import { analyzeSession } from '../lib/analysis';
 import { callGemini } from '../lib/gemini';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
@@ -180,8 +179,7 @@ export default function PracticeSession() {
             await flush();
             const turns = snapshot();
             updateSession(startedAt, { turns });
-            const analysis = await analyzeSession({ model, language, turns });
-            if (analysis) updateSession(startedAt, { analysis });
+            await runAnalysis(startedAt, { model, language, turns });
         })();
     };
 
@@ -190,7 +188,10 @@ export default function PracticeSession() {
 
     const toggleSession = () => {
         if (isSessionActive) {
+            const startedAt = startedAtRef.current;
+            const hadTurns = liveTurns().length > 0;
             endSession();
+            if (hadTurns) navigate(`/report/${startedAt}`);
         } else {
             // Each user needs their own Gemini key
             if (!hasKey) {
