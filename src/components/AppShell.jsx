@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import Avatar from './Avatar';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faHouse, faBullseye, faLanguage, faClockRotateLeft, faEllipsis, faUser, faSeedling,
+  faHouse, faBullseye, faLanguage, faClockRotateLeft, faEllipsis, faSeedling,
   faGear, faCircleQuestion, faRightFromBracket,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
-  { to: '/', label: 'Home', icon: faHouse, end: true },
+  { to: '/dashboard', label: 'Home', icon: faHouse, end: true },
   { to: '/warmup', label: 'Practice', icon: faBullseye },
   { to: '/info/learning', label: 'Learning', icon: faLanguage },
   { to: '/history', label: 'History', icon: faClockRotateLeft },
@@ -27,6 +29,7 @@ function Logo() {
 
 function ProfileMenu() {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -44,8 +47,7 @@ function ProfileMenu() {
   const items = [
     { icon: faGear, label: 'Settings', run: () => navigate('/settings') },
     { icon: faCircleQuestion, label: 'Help', run: () => navigate('/info/help') },
-    // TODO: call supabase.auth.signOut() here once login is added
-    { icon: faRightFromBracket, label: 'Logout', run: () => navigate('/auth'), danger: true },
+    { icon: faRightFromBracket, label: 'Logout', run: async () => { await signOut(); navigate('/', { replace: true }); }, danger: true },
   ];
 
   return (
@@ -54,9 +56,9 @@ function ProfileMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Profile menu"
         aria-expanded={open}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 transition hover:bg-blue-200"
+        className="rounded-full transition hover:opacity-80"
       >
-        <FontAwesomeIcon icon={faUser} />
+        <Avatar user={user} size={36} />
       </button>
 
       {open && (

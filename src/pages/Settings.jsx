@@ -144,7 +144,7 @@ export default function Settings() {
       </header>
 
       <main className="mx-auto flex max-w-3xl flex-col gap-3 px-3 py-6 md:px-6 md:py-8">
-        <Row icon={faUser} title="Account Settings" sub="Manage your profile and preferences" soon />
+        <Row icon={faUser} title="Account Settings" sub="Manage your profile and preferences" onClick={() => navigate('/settings/account')} />
 
         {/* Gemini API key */}
         <Block icon={faKey} title="Gemini API Key" sub="Required to practice. Each user uses their own key.">

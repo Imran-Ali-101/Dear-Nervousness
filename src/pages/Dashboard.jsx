@@ -6,6 +6,8 @@ import {
   faTrophy, faKey, faCheck, faChartLine, faChartColumn,
 } from '@fortawesome/free-solid-svg-icons';
 import Dropdown from '../components/Dropdown';
+import { useAuth } from '../hooks/useAuth';
+import { getDisplayName } from '../lib/profile';
 import { TrendChart, PerformanceChart } from '../components/Charts';
 import { LANGUAGES, TYPES, PERSONAS, LEVELS, LIMITS } from '../lib/practiceOptions';
 import { hasGeminiKey } from '../lib/apiKey';
@@ -61,6 +63,8 @@ function EmptyState({ icon, text }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const firstName = getDisplayName(user).split(' ')[0];
   const [tab, setTab] = useState('confidence');
   const [setup, setSetup] = useState({ language: getDefaultLang(), type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '' });
   const [hasKey] = useState(hasGeminiKey);
@@ -87,7 +91,7 @@ export default function Dashboard() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-8">
-      <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Welcome back</h1>
+      <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Welcome back {firstName ? `, ${firstName}` : ''}</h1>
       <p className="mt-1 text-sm text-gray-500 md:text-base">Better communication. Greater confidence. A brighter you.</p>
 
       {/* Stepper */}

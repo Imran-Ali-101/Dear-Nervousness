@@ -217,7 +217,7 @@ export default function PracticeSession() {
             {/* Header */}
             <header className="relative z-30 shrink-0 border-b border-gray-200 bg-white px-3 py-2.5 md:px-6 md:py-3">
                 <div className="mx-auto flex max-w-6xl items-center gap-2 md:gap-4">
-                    <button onClick={() => navigate('/')} aria-label="Back to dashboard" className="rounded-lg px-2.5 py-2 text-gray-700 hover:bg-gray-100">
+                    <button onClick={() => navigate('/dashboard')} aria-label="Back to dashboard" className="rounded-lg px-2.5 py-2 text-gray-700 hover:bg-gray-100">
                         <FontAwesomeIcon icon={faArrowLeft} />
                     </button>
                     <img src="/logo.svg" alt="" className="h-8 w-8 object-contain" />

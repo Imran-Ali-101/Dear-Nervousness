@@ -12,14 +12,14 @@ export const DEFAULT_GENERAL_PROMPT = [
 ].join(' ');
 
 export const getGeneralPrompt = () => {
-  try { return localStorage.getItem(KEY) || DEFAULT_GENERAL_PROMPT; } catch { return DEFAULT_GENERAL_PROMPT; }
+  try { return localStorage.getItem(scoped(KEY)) || DEFAULT_GENERAL_PROMPT; } catch { return DEFAULT_GENERAL_PROMPT; }
 };
 
 // Empty text = go back to the default prompt
 export const setGeneralPrompt = (text) => {
   try {
-    if (text.trim()) localStorage.setItem(KEY, text.trim());
-    else localStorage.removeItem(KEY);
+    if (text.trim()) localStorage.setItem(scopef(KEY), text.trim());
+    else localStorage.removeItem(scoped(KEY));
   } catch { /* ignore */ }
 };
 

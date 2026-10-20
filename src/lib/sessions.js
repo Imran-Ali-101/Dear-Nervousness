@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react';
+import { scoped } from './userScope';
 
 const KEY = 'dn_sessions';
 const MAX = 100;
+const KEEP_CHATS = 5; // only the newest 5 sessions keep their conversation
 const EVENT = 'dn-sessions';
 
 const read = () => {
   try {
-    const list = JSON.parse(localStorage.getItem(KEY) || '[]');
+    const list = JSON.parse(localStorage.getItem(scoped(KEY)) || '[]');
     return Array.isArray(list) ? list : [];
   } catch {
     return [];
   }
 };
 
+const prune = (list) => {
+  const keep = new Set([...list].sort((a, b) => b.startedAt - a.startedAt).slice(0, KEEP_CHATS).map((s) => s.startedAt));
+  return list.map((s) => (keep.has(s.startedAt) || !s.turns ? s : { ...s, turns: undefined }));
+};
+
 // Save and tell every open page that the data changed
 const write = (list) => {
-  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  try { localStorage.setItem(scoped(KEY), JSON.stringify(prune(list))); } catch { /* ignore */ }
   window.dispatchEvent(new Event(EVENT));
 };
 
