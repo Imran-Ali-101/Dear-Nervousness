@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Avatar from './Avatar';
+import DeletionBanner from './DeletionBanner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faHouse, faBullseye, faLanguage, faClockRotateLeft, faEllipsis, faSeedling,
@@ -117,6 +118,8 @@ export default function AppShell() {
           <div className="lg:hidden"><Logo /></div>
           <div className="ml-auto"><ProfileMenu /></div>
         </header>
+
+        <DeletionBanner />
 
         {/* Page content; the key replays the enter animation on each tab change */}
         <div key={pathname} className="anim-page pb-24 lg:pb-0">

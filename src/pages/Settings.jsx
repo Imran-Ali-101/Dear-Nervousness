@@ -4,11 +4,13 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowLeft, faKey, faEye, faEyeSlash, faCircleCheck, faTriangleExclamation, faTrash,
   faShieldHalved, faArrowUpRightFromSquare, faSpinner, faUser, faBell, faMoon, faGlobe,
-  faCircleQuestion, faCircleInfo, faWandMagicSparkles, faChevronRight,
+  faCircleQuestion, faCircleInfo, faWandMagicSparkles, faChevronRight, faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import { getGeminiKey, setGeminiKey, clearGeminiKey } from '../lib/apiKey';
 import { getGeneralPrompt, setGeneralPrompt, DEFAULT_GENERAL_PROMPT } from '../lib/prompts';
 import { getTheme, setTheme, getDefaultLang, setDefaultLang } from '../lib/prefs';
+import { useAuth } from '../hooks/useAuth';
+import { requestDeletion, cancelDeletion, getDeletionDate, DELETE_AFTER_DAYS } from '../lib/deletion';
 
 // Cheap request that fails if the key is invalid
 async function verifyKey(key) {
@@ -85,9 +87,21 @@ export default function Settings() {
   const [theme, setThemeState] = useState(getTheme);
   const [lang, setLang] = useState(getDefaultLang);
 
-  // Account deletion (the request is only stored on this device for now)
+    // Account deletion (saved on the server, removed by a daily job)
+  const { user } = useAuth();
+  const deleteOn = getDeletionDate(user);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
   const [delMsg, setDelMsg] = useState('');
+
+  const runDeletion = async (action, done) => {
+    setDelBusy(true);
+    setDelMsg('');
+    const { error } = await action();
+    setDelBusy(false);
+    setConfirmDel(false);
+    setDelMsg(error ? `Something went wrong: ${error.message}` : done);
+  };
 
   const save = async () => {
     const key = input.trim();
@@ -124,12 +138,6 @@ export default function Settings() {
     setPrompt(DEFAULT_GENERAL_PROMPT);
     setPromptMsg('Reset to the default prompt.');
     setTimeout(() => setPromptMsg(''), 2500);
-  };
-
-  const requestDeletion = () => {
-    try { localStorage.setItem('dn_deletion_requested', String(Date.now())); } catch { /* ignore */ }
-    setConfirmDel(false);
-    setDelMsg('Your deletion request was recorded. It will be sent to the server once accounts are connected.');
   };
 
   return (
@@ -242,7 +250,12 @@ export default function Settings() {
         <Row icon={faCircleInfo} title="About App" onClick={() => navigate('/info/about')} />
 
         {/* Always the last item */}
-        <Row icon={faTriangleExclamation} title="Request Account Deletion" sub="Permanently deletes in 7 days" danger onClick={() => setConfirmDel(true)} />
+        {deleteOn ? (
+          <Row icon={faRotateLeft} title="Cancel account deletion" sub={`Scheduled for ${deleteOn.toLocaleDateString()}`} danger onClick={() => runDeletion(cancelDeletion, 'Account deletion cancelled.')} />
+        ) : (
+          <Row icon={faTriangleExclamation} title="Request Account Deletion" sub={`Permanently deletes in ${DELETE_AFTER_DAYS} days`} danger onClick={() => setConfirmDel(true)} />
+        )}
+          
         {delMsg && <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">{delMsg}</p>}
       </main>
 
@@ -250,10 +263,15 @@ export default function Settings() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setConfirmDel(false)}>
           <div className="anim-pop w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-gray-900">Request account deletion?</h3>
-            <p className="mt-2 text-sm text-gray-600">Your account and all its data will be permanently deleted in 7 days.</p>
+            <p className="mt-2 text-sm text-gray-600">Your account and all its data will be permanently deleted in {DELETE_AFTER_DAYS} days. You can cancel any time before that.</p>
             <div className="mt-5 flex gap-2">
               <button onClick={() => setConfirmDel(false)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={requestDeletion} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700">Request deletion</button>
+              <button
+                onClick={() => runDeletion(requestDeletion, `Your account will be deleted in ${DELETE_AFTER_DAYS} days. You can cancel from here before then.`)}
+                disabled={delBusy}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
+                    {delBusy && <FontAwesomeIcon icon={faSpinner} spin />} Request deletion
+              </button>
             </div>
           </div>
         </div>

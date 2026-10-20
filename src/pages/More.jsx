@@ -7,7 +7,7 @@ import {
 
 const SERVICES = [
   { icon: faMicrophoneLines, label: 'Mock Interviews', sub: 'Practice with an AI interviewer', to: '/warmup' },
-  { icon: faLanguage, label: 'English/Bengali Learning', sub: 'Coming soon', to: '/info/learning' },
+  { icon: faLanguage, label: 'English/Bengali Learning', sub: 'English Grammar', to: '/info/learning' },
   { icon: faGear, label: 'Settings', sub: 'API key, prompts', to: '/settings' },
 ];
 const LEGAL = [
