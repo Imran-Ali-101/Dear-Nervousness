@@ -18,6 +18,9 @@ import { useAuth } from '../hooks/useAuth';
 import { getDisplayName } from '../lib/profile';
 import { buildPrompt, buildGreeting } from '../lib/prompts';
 import { callGemini } from '../lib/gemini';
+import useCamera from '../hooks/useCamera';
+import CameraConsent from '../components/CameraConsent';
+import { hasCameraConsent, giveCameraConsent } from '../lib/cameraConsent';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -48,6 +51,19 @@ export default function PracticeSession() {
     const [secondsLeft, setSecondsLeft] = useState(cfg.minutes * 60);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState('');
+
+    const { videoRef, status: camStatus, start: startCamera, stop: stopCamera } = useCamera();
+    const [consentOpen, setConsentOpen] = useState(false); 
+    const turnOnCamera = () => {
+        if (hasCameraConsent()) startCamera();   // already agreed once
+        else setConsentOpen(true);               // first time: explain first
+    };
+    const acceptConsent = () => {
+        giveCameraConsent();
+        setConsentOpen(false);
+        startCamera();
+    };
+    
     const [voices, setVoices] = useState([]);
     const [voiceByLang, setVoiceByLang] = useState(loadSavedVoices);
     const hasKey = hasGeminiKey();
@@ -347,10 +363,33 @@ export default function PracticeSession() {
             {/* Body */}
             <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col p-3 md:p-6">
                 <section className="relative min-h-0 flex-1 overflow-hidden rounded-3xl border-4 border-gray-800 bg-gray-900 shadow-inner">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500">
-                        <FontAwesomeIcon icon={faCamera} className="text-4xl md:text-5xl" />
-                        <p className="text-xs font-medium md:text-sm">Camera preview coming soon</p>
-                    </div>
+                    {/* Mirrored like a selfie; always mounted so the stream can attach */}
+                    <video
+                        ref={videoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{ transform: 'scaleX(-1)' }}
+                        className={`absolute inset-0 h-full w-full object-cover ${camStatus === 'on' ? '' : 'opacity-0'}`}
+                    />
+                    
+                    {camStatus !== 'on' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-gray-400">
+                            <FontAwesomeIcon icon={camStatus === 'starting' ? faSpinner : faCamera} spin={camStatus === 'starting'} className="text-4xl md:text-5xl" />
+                            <p className="text-xs font-medium md:text-sm">
+                                {camStatus === 'denied' ? 'Camera access was blocked. Allow it in your browser settings and try again.'
+                                    : camStatus === 'error' ? 'Could not start the camera on this device.'
+                                    : 'The camera is optional. Turn it on to get presence scores.'}
+                            </p>
+                            {camStatus !== 'starting' && (
+                                <button onClick={turnOnCamera} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700">Turn on camera</button>
+                            )}
+                        </div>
+                    )}
+                    
+                    {camStatus === 'on' && (
+                        <button onClick={stopCamera} className="absolute right-3 top-14 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur-md hover:bg-black/70">Turn off camera</button>
+                    )}
             
                     <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 backdrop-blur-md">
                         <span className={`h-2 w-2 rounded-full ${isSessionActive ? 'animate-pulse bg-red-500' : 'bg-gray-400'}`} />
@@ -391,6 +430,7 @@ export default function PracticeSession() {
                     </button>
                 </div>
             </footer>
+            <CameraConsent open={consentOpen} onAccept={acceptConsent} onCancel={() => setConsentOpen(false)} />
         </div>
     );
 }
