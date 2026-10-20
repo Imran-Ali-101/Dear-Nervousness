@@ -18,3 +18,4 @@ export const setUserScope = (id) => {
 };
 
 export const scoped = (key) => `${key}:${scope}`;
+export const currentUserId = () => (scope === 'anon' ? null : scope);

@@ -1,6 +1,7 @@
 import { createContext, createElement, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { setUserScope } from '../lib/userScope';
+import { syncSessions } from '../lib/sessions';
 
 const AuthContext = createContext({ session: null, user: null, loading: true, signOut: async () => {} });
 
@@ -12,11 +13,17 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data }) => {
         setUserScope(data.session?.user?.id);
         setSession(data.session);
-      setLoading(false);
+        setLoading(false);
+        if (data.session) syncSessions();
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setUserScope(s?.user?.id);
       setSession(s);
+      const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+          setUserScope(s?.user?.id);
+          setSession(s);
+          if (event === 'SIGNED_IN') setTimeout(syncSessions, 0);
+        });
     });
     return () => sub.subscription.unsubscribe();
   }, []);

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -65,6 +65,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const firstName = getDisplayName(user).split(' ')[0];
+  // Wake the TTS server early so the first AI voice is not slow
+  useEffect(() => { fetch(`${import.meta.env.VITE_TTS_URL || ''}/api/health`).catch(() => {}); }, []);
   const [tab, setTab] = useState('confidence');
   const [setup, setSetup] = useState({ language: getDefaultLang(), type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '' });
   const [hasKey] = useState(hasGeminiKey);
