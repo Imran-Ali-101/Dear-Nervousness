@@ -15,7 +15,14 @@ export const PERSONAS = [
   { value: 'software', label: 'Software Engineer' },
   { value: 'hr', label: 'HR Interviewer' },
   { value: 'tutor', label: 'Friendly Tutor' },
+  { value: 'custom', label: 'Custom...' },
 ];
+
+export const PERSONA_PROMPTS = {
+  software: 'You are a senior software engineer interviewing the user for a software engineering role. Mix technical and behavioural questions.',
+  hr: 'You are an HR interviewer. Focus on motivation, strengths, teamwork and workplace scenarios.',
+  tutor: 'You are a friendly, patient tutor helping the user speak more fluently.',
+};
 
 export const LEVELS = [
   { value: 'easy', label: 'Easy' },

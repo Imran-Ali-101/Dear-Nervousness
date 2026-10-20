@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faArrowLeft, faGear, faStopwatch, faCamera, faMicrophone, faPlay, faStop, faComments,
-  faLightbulb, faSpinner, faVolumeHigh, faHourglassHalf, faCircleCheck, faWandMagicSparkles, 
+  faArrowLeft, faGear, faStopwatch, faCamera, faMicrophone, faPlay, 
+  faStop, faSpinner, faVolumeHigh, faHourglassHalf, faCircleCheck, 
   faKey,
 } from '@fortawesome/free-solid-svg-icons';
 import { useTTS } from '../hooks/useTTS';
@@ -13,7 +13,9 @@ import useGeminiModels from '../hooks/useGeminiModels';
 import Dropdown from '../components/Dropdown';
 import { LANGUAGES, PERSONAS, LEVELS, TYPES, VOICES } from '../lib/practiceOptions';
 import { hasGeminiKey } from '../lib/apiKey';
-import { addSession } from '../lib/sessions';
+import { addSession, updateSession } from '../lib/sessions';
+import { buildPrompt } from '../lib/prompts';
+import { analyzeSession } from '../lib/analysis';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -28,21 +30,20 @@ const loadSavedVoices = () => {
 export default function PracticeSession() {
     const navigate = useNavigate();
     const { state } = useLocation();
-    const cfg = { language: 'en', type: 'interview', persona: 'software', level: 'medium', minutes: 10, ...(state || {}) };
+    const cfg = { language: 'en', type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '', ...(state || {}) };
 
     const [language, setLanguage] = useState(cfg.language);
     const [isSessionActive, setIsSessionActive] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(cfg.minutes * 60);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [saveStatus, setSaveStatus] = useState('');
     const [voices, setVoices] = useState([]);
     const [voiceByLang, setVoiceByLang] = useState(loadSavedVoices);
     const hasKey = hasGeminiKey();
     const startedAtRef = useRef(0);
-    const turnsRef = useRef(0);
 
     // Refs always hold the latest value, so async callbacks never read stale state
     const activeRef = useRef(false);
-    const chatContainerRef = useRef(null);
     const settingsRef = useRef(null);
 
     const voice = voiceByLang[language];
@@ -51,9 +52,9 @@ export default function PracticeSession() {
 
     const { models, model, setModel, loading: modelsLoading } = useGeminiModels();
     const { speak, stop: stopTTS, state: ttsState, getVoices } = useTTS({ voice: VOICES[language] });
-    const { chatHistory, isThinking, analysisStatus, processAudio } = useGeminiLive(model);
-    turnsRef.current = chatHistory.length;
-
+    const systemPrompt = buildPrompt({ ...cfg, language });
+    const { caption, isThinking, processAudio, liveTurns, flush, reset } = useGeminiLive(model, systemPrompt);
+    
     const handleAudioReady = (base64Audio) => {
         // Ignore audio that arrives after the session was ended
         if (!activeRef.current) return;
@@ -82,24 +83,43 @@ export default function PracticeSession() {
         if (activeRef.current) startRecording();
     };
 
-        const endSession = () => {
-        // Log the finished session for the dashboard progress
-        if (activeRef.current && turnsRef.current > 0) {
-            addSession({
-                startedAt: startedAtRef.current,
-                durationSec: Math.round((Date.now() - startedAtRef.current) / 1000),
-                language,
-                type: cfg.type,
-                persona: cfg.persona,
-                level: cfg.level,
-                turns: turnsRef.current,
-            });
-        }
+    const endSession = () => {
+        if (!activeRef.current) return;
+        const startedAt = startedAtRef.current;
+        const live = liveTurns();            // this session's turns
         activeRef.current = false;
         setIsSessionActive(false);
         stopRecording();
         stopTTS();
+        if (!live.length) return;
+    
+        const snapshot = () => live.map((t) => ({ ...t }));
+    
+        // 1) Save right away, so nothing is lost
+        addSession({
+            startedAt,
+            durationSec: Math.round((Date.now() - startedAt) / 1000),
+            language,
+            type: cfg.type,
+            persona: cfg.persona,
+            level: cfg.level,
+            turns: snapshot(),
+        });
+        setSaveStatus('Saved ✓ Analyzing in background...');
+        setTimeout(() => setSaveStatus(''), 3000);
+    
+        // 2) Finish in the background: last transcripts first, then the analysis
+        (async () => {
+            await flush();
+            const turns = snapshot();
+            updateSession(startedAt, { turns });
+            const analysis = await analyzeSession({ model, language, turns });
+            if (analysis) updateSession(startedAt, { analysis });
+        })();
     };
+
+    const endRef = useRef(null);
+    endRef.current = endSession;
 
     const toggleSession = () => {
         if (isSessionActive) {
@@ -110,6 +130,8 @@ export default function PracticeSession() {
                 navigate('/settings');
                 return;
             }
+            reset();
+            setSaveStatus('');
             activeRef.current = true;
             startedAtRef.current = Date.now();
             setSettingsOpen(false);
@@ -150,8 +172,9 @@ export default function PracticeSession() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [secondsLeft, isSessionActive]);
 
-    // Release the microphone when leaving the page
+    // Leaving the page: save a running session first, then release the microphone
     useEffect(() => () => {
+        endRef.current?.();
         activeRef.current = false;
         stopRecording();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,12 +188,6 @@ export default function PracticeSession() {
         document.addEventListener('mousedown', onDown);
         return () => document.removeEventListener('mousedown', onDown);
     }, []);
-
-    useEffect(() => {
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-    }, [chatHistory]);
 
     // Voice options filtered by the selected language
     const voiceOptions = voices
@@ -261,63 +278,34 @@ export default function PracticeSession() {
             </header>
 
             {/* Body */}
-            <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 p-3 md:gap-5 md:p-6 lg:grid lg:grid-cols-5">
-                {/* Camera placeholder (camera will be added later) */}
-                <section className="relative h-[340px] shrink-0 overflow-hidden rounded-3xl border-4 border-gray-800 bg-gray-900 shadow-inner sm:h-[420px] lg:col-span-2 lg:h-full">
+            <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col p-3 md:p-6">
+                <section className="relative min-h-0 flex-1 overflow-hidden rounded-3xl border-4 border-gray-800 bg-gray-900 shadow-inner">
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500">
                         <FontAwesomeIcon icon={faCamera} className="text-4xl md:text-5xl" />
                         <p className="text-xs font-medium md:text-sm">Camera preview coming soon</p>
                     </div>
-
+            
                     <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 backdrop-blur-md">
                         <span className={`h-2 w-2 rounded-full ${isSessionActive ? 'animate-pulse bg-red-500' : 'bg-gray-400'}`} />
                         <span className="text-[11px] font-medium text-white md:text-xs">{isSessionActive ? 'Live Session' : 'Camera Preview'}</span>
                     </div>
-
+            
+                    {saveStatus && (
+                        <span className="absolute right-3 top-3 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md">{saveStatus}</span>
+                    )}
+            
+                    {/* Caption: only what the AI says */}
+                    {caption && (
+                        <div className="absolute inset-x-3 bottom-16 max-h-24 overflow-y-auto rounded-xl bg-black/60 px-3 py-2 text-center text-xs leading-snug text-white backdrop-blur-md md:bottom-20 md:text-sm">
+                            {caption}
+                        </div>
+                    )}
+            
                     <div className="absolute bottom-3 left-1/2 w-max max-w-[90%] -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-4 py-2 shadow-lg backdrop-blur-md md:bottom-5">
                         <span className="flex items-center gap-2.5 truncate text-xs font-medium text-white md:text-sm">
                             <FontAwesomeIcon icon={status.icon} spin={!!status.spin} />
                             {status.text}
                         </span>
-                    </div>
-                </section>
-
-                {/* Transcript */}
-                <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm lg:col-span-3">
-                    <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-700 md:text-base">
-                            <FontAwesomeIcon icon={faComments} className="text-gray-500" /> Transcript
-                        </h3>
-                        {analysisStatus && <span className="max-w-[55%] truncate rounded-md bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600">{analysisStatus}</span>}
-                    </div>
-
-                    <div ref={chatContainerRef} className="flex flex-1 flex-col gap-3 overflow-y-auto bg-gray-50/60 p-3 md:p-5">
-                        {chatHistory.length === 0 && (
-                            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-400">
-                                <FontAwesomeIcon icon={faWandMagicSparkles} className="text-4xl opacity-60" />
-                                <p className="text-sm font-medium">Start the conversation</p>
-                            </div>
-                        )}
-
-                        {chatHistory.map((msg, idx) => (
-                            <div key={idx} className={`flex w-full ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.type === 'user' ? (
-                                    <div className="max-w-[88%] rounded-2xl rounded-tr-sm bg-blue-600 p-3 text-white shadow-md md:max-w-[80%]">
-                                        <span className="text-sm leading-relaxed md:text-[15px]">{msg.text}</span>
-                                        {msg.feedback && (
-                                            <div className="mt-2 rounded-lg bg-blue-700/50 p-2 text-xs md:text-sm">
-                                                <strong className="text-blue-200"><FontAwesomeIcon icon={faLightbulb} className="mr-1.5" />Tip:</strong> {msg.feedback}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white p-3 text-gray-800 shadow-sm md:max-w-[80%]">
-                                        <strong className="mb-1 block text-[10px] uppercase tracking-wider text-blue-600 md:text-xs">AI Coach</strong>
-                                        <span className="text-sm leading-relaxed md:text-[15px]">{msg.text}</span>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
                     </div>
                 </section>
             </main>

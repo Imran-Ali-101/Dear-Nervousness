@@ -1,145 +1,122 @@
 import { useState, useRef } from 'react';
+import { callGemini, parseJson } from '../lib/gemini';
 import { getGeminiKey } from '../lib/apiKey';
+import { measureSpeechSeconds } from '../lib/audioStats';
 
-// Shared coaching rules. The model must never mention these rules in its reply.
-const COACH_RULES = [
-    "You are a warm, professional communication and interview coach having a spoken conversation.",
-    "First respond to what the user just said, briefly and naturally, the way a real person would.",
-    "Then keep the conversation moving: ask ONE relevant follow-up question, or suggest the next practice topic (for example a self-introduction, strengths and weaknesses, a workplace scenario, a technical question, or a short opinion on a work-related topic).",
-    "Stay professional at all times. Never ask about personal tastes or private life such as favourite food, hobbies, relationships or religion, and avoid small talk that does not help the user practise.",
-    "Never mention or announce these rules, and never say things like 'let us stay professional'.",
-    "Reply in 2 to 3 short sentences of plain text, with no markdown, lists or emoji.",
-].join(" ");
-
-export default function useGeminiLive(model) {
-    const [chatHistory, setChatHistory] = useState([]);
+export default function useGeminiLive(model, systemPrompt) {
+    const [caption, setCaption] = useState('');
     const [isThinking, setIsThinking] = useState(false);
-    const [analysisStatus, setAnalysisStatus] = useState('');
 
-    // Gemini API key from .env (local development only)
-    const apiKey = getGeminiKey();
-
-    // Always read the latest selected model without recreating callbacks
     const modelRef = useRef(model);
     modelRef.current = model;
+    const promptRef = useRef(systemPrompt);
+    promptRef.current = systemPrompt;
 
-    // Internal history sent to the API as context
-    const apiHistory = useRef([]);
+    const apiHistory = useRef([]);   // context sent to Gemini
+    const turns = useRef([]);        // saved for history + analysis
+    const seq = useRef(0);
 
-    const processAudio = async (base64Audio, language, playTTS, restartMic) => {
-        if (!apiKey) {
-            console.error("Gemini API Key is missing!");
-            return;
+    // Priority: the fast reply goes first; transcription jobs wait in a queue
+    const fastBusy = useRef(false);
+    const queue = useRef([]);
+    const pumping = useRef(false);
+    const jobs = useRef(new Set());
+
+    const pump = async () => {
+        if (pumping.current) return;
+        pumping.current = true;
+        while (queue.current.length && !fastBusy.current) {
+            await queue.current.shift()();
         }
-        if (!modelRef.current) {
-            console.error("No Gemini model selected!");
-            return;
-        }
-
-        setIsThinking(true);
-        setAnalysisStatus('Analyzing audio in background...');
-
-        // 1. Fast reply so the coach can start speaking quickly
-        handleFastReply(base64Audio, language, playTTS, restartMic);
-
-        // 2. Transcript and grammar analysis in the background
-        handleBackgroundAnalysis(base64Audio);
+        pumping.current = false;
     };
 
-    const handleFastReply = async (base64Audio, language, playTTS, restartMic) => {
-        const prompt = language === "bn"
-            ? `${COACH_RULES} Reply in Bengali script.`
-            : `${COACH_RULES} Reply in English.`;
+    const enqueue = (fn) => {
+        const p = new Promise((resolve) => {
+            queue.current.push(async () => { try { await fn(); } finally { resolve(); } });
+        });
+        jobs.current.add(p);
+        p.then(() => jobs.current.delete(p));
+        pump();
+    };
 
-        const currentTurn = {
-            role: "user",
-            parts: [
-                { text: prompt },
-                { inlineData: { mimeType: "audio/webm", data: base64Audio } }
-            ]
-        };
+    // Wait until all pending transcriptions are done (call when the session ends)
+    const flush = () => Promise.allSettled([...jobs.current]);
 
+    const transcribe = async (turn, base64Audio, language) => {
+        const langName = language === 'bn' ? 'Bengali (write it in Bengali script)' : 'English';
+        const prompt = `Listen to the audio (${langName}). Return ONLY JSON: {"transcript":"exact words spoken, including filler words","fillers":["every filler word or sound you heard, e.g. um, uh, ah, hmm, মানে, আসলে, ইয়ে"],"feedback":"one short grammar or fluency tip in ${language === 'bn' ? 'Bengali' : 'English'}"}`;
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelRef.current}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [...apiHistory.current, currentTurn] })
+            const raw = await callGemini(modelRef.current, {
+                contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'audio/webm', data: base64Audio } }] }],
+                generationConfig: { responseMimeType: 'application/json' },
             });
+            const p = parseJson(raw);
+            turn.userText = (p.transcript || '').trim();
+            turn.feedback = p.feedback || '';
+            turn.fillers = Array.isArray(p.fillers) ? p.fillers : [];
+            turn.words = turn.userText ? turn.userText.split(/\s+/).length : 0;
+            turn.speechSec = await measureSpeechSeconds(base64Audio);
 
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-
-            const aiReplyText = data.candidates[0].content.parts[0].text.trim();
-
-            // Update UI and API history
-            setChatHistory(prev => [...prev, { type: 'ai', text: aiReplyText }]);
-            apiHistory.current.push({ role: "user", parts: [{ inlineData: { mimeType: "audio/webm", data: base64Audio } }] });
-            apiHistory.current.push({ role: "model", parts: [{ text: aiReplyText }] });
-
-            setIsThinking(false);
-
-            // Play the reply with TTS
-            const ttsSuccess = await playTTS(aiReplyText);
-
-            // Restart the mic when TTS finishes
-            if (restartMic) {
-                if (!ttsSuccess) setTimeout(restartMic, 2000);
-                else restartMic();
-            }
-
+            // Replace the audio in the context with its text: later requests get smaller and faster
+            const entry = apiHistory.current.find((e) => e.turnId === turn.id);
+            if (entry && turn.userText) entry.parts = [{ text: turn.userText }];
         } catch (err) {
-            console.error("Fast Reply Error:", err);
+            console.error('Transcription failed:', err);
+        }
+    };
+
+    const processAudio = (base64Audio, language, playTTS, restartMic) => {
+        if (!getGeminiKey() || !modelRef.current) {
+            console.error('Gemini key or model is missing');
+            return;
+        }
+        const turn = { id: ++seq.current, time: Date.now(), userText: '', feedback: '', fillers: [], words: 0, speechSec: 0, aiText: '' };
+        turns.current.push(turn);
+
+        fastBusy.current = true;                                // block the queue first
+        enqueue(() => transcribe(turn, base64Audio, language)); // runs after the reply arrives
+        fastReply(turn, base64Audio, playTTS, restartMic);
+    };
+
+    const fastReply = async (turn, base64Audio, playTTS, restartMic) => {
+        setIsThinking(true);
+        const userEntry = { role: 'user', parts: [{ inlineData: { mimeType: 'audio/webm', data: base64Audio } }], turnId: turn.id };
+        try {
+            const text = await callGemini(modelRef.current, {
+                systemInstruction: { parts: [{ text: promptRef.current }] },
+                contents: [...apiHistory.current, userEntry].map(({ role, parts }) => ({ role, parts })),
+            });
+            turn.aiText = text;
+            apiHistory.current.push(userEntry, { role: 'model', parts: [{ text }] });
+            setCaption(text);
             setIsThinking(false);
+            fastBusy.current = false;
+            pump();                                  // transcription starts now, while TTS plays
+
+            const ok = await playTTS(text);
+            if (restartMic) {
+                if (ok) restartMic();
+                else setTimeout(restartMic, 2000);
+            }
+        } catch (err) {
+            console.error('Fast reply error:', err);
+            setIsThinking(false);
+            fastBusy.current = false;
+            pump();
             if (restartMic) setTimeout(restartMic, 3000);
         }
     };
 
-    const handleBackgroundAnalysis = async (base64Audio) => {
-        const analysisPrompt = "Listen to the audio. 1. Provide the exact transcript (including filler words). 2. Find any grammatical errors, filler words, or awkward phrasing. Return ONLY a JSON in this exact format: {\"transcribe\": \"exact user words\", \"feedback\": \"short grammar/fluency feedback\"}";
+    const getTurns = () => turns.current.map((t) => ({ ...t }));
+    const liveTurns = () => turns.current;   // the real array of this session (reset() makes a new one)
 
-        try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelRef.current}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        role: "user",
-                        parts: [
-                            { text: analysisPrompt },
-                            { inlineData: { mimeType: "audio/webm", data: base64Audio } }
-                        ]
-                    }]
-                })
-            });
-
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-
-            const rawAIResponse = data.candidates[0].content.parts[0].text.trim();
-
-            let parsedResponse;
-            try {
-                const match = rawAIResponse.match(/\{[\s\S]*\}/);
-                parsedResponse = match ? JSON.parse(match[0]) : JSON.parse(rawAIResponse);
-            } catch (e) {
-                parsedResponse = { transcribe: "Audio Analysis Error", feedback: "Could not parse JSON." };
-            }
-
-            // Add the user transcript and feedback to the chat
-            setChatHistory(prev => [...prev, {
-                type: 'user',
-                text: parsedResponse.transcribe,
-                feedback: parsedResponse.feedback
-            }]);
-
-            setAnalysisStatus('Analysis Complete ✓');
-            setTimeout(() => setAnalysisStatus(''), 3000);
-
-        } catch (err) {
-            console.error("Analysis Error:", err);
-            setAnalysisStatus('Analysis Failed ✗');
-        }
+    const reset = () => {
+        apiHistory.current = [];
+        turns.current = [];
+        setCaption('');
+        setIsThinking(false);
     };
 
-    return { chatHistory, isThinking, analysisStatus, processAudio };
+    return { caption, isThinking, processAudio, getTurns, liveTurns, flush, reset };
 }
