@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { callGemini, parseJson } from '../lib/gemini';
 import { getGeminiKey } from '../lib/apiKey';
-import { measureSpeechSeconds } from '../lib/audioStats';
+import { measureAudio } from '../lib/audioStats';
 
 export default function useGeminiLive(model, systemPrompt) {
     const [caption, setCaption] = useState('');
@@ -56,7 +56,7 @@ export default function useGeminiLive(model, systemPrompt) {
             turn.feedback = p.feedback || '';
             turn.fillers = Array.isArray(p.fillers) ? p.fillers : [];
             turn.words = turn.userText ? turn.userText.split(/\s+/).length : 0;
-            turn.speechSec = await measureSpeechSeconds(base64Audio);
+            Object.assign(turn, await measureAudio(base64Audio));   // speechSec + pause numbers
 
             // Replace the audio in the context with its text: later requests get smaller and faster
             const entry = apiHistory.current.find((e) => e.turnId === turn.id);
@@ -71,7 +71,7 @@ export default function useGeminiLive(model, systemPrompt) {
             console.error('Gemini key or model is missing');
             return;
         }
-        const turn = { id: ++seq.current, time: Date.now(), userText: '', feedback: '', fillers: [], words: 0, speechSec: 0, aiText: '' };
+        const turn = { id: ++seq.current, time: Date.now(), userText: '', feedback: '', fillers: [], words: 0, speechSec: 0, shortPauses: 0, longPauses: 0, pauseSec: 0, longestPauseSec: 0, aiText: '' };
         turns.current.push(turn);
 
         fastBusy.current = true;                                // block the queue first

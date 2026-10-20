@@ -46,10 +46,44 @@ export default function History() {
                   {s.analysis?.summary && (
                     <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900 md:text-sm">
                       <p>{s.analysis.summary}</p>
+                      {s.analysis.pausesPerMin != null && (
+                        <p className="mt-2 text-xs text-blue-700">
+                          Pauses: {s.analysis.shortPauses} natural, {s.analysis.longPauses} long ({s.analysis.pausePercent}% of speaking time)
+                        </p>
+                      )}
                       {s.analysis.tips?.length > 0 && (
                         <ul className="mt-2 list-disc space-y-1 pl-5">
                           {s.analysis.tips.map((t, i) => <li key={i}>{t}</li>)}
                         </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {(s.analysis?.improvements?.length > 0 || s.analysis?.vocab?.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 md:text-sm">
+                      {s.analysis.improvements?.length > 0 && (
+                        <>
+                          <p className="font-bold">Say it better</p>
+                          <ul className="mt-1.5 space-y-2.5">
+                            {s.analysis.improvements.map((x, i) => (
+                              <li key={i}>
+                                <p className="text-gray-500 line-through">{x.original}</p>
+                                <p className="font-semibold text-emerald-700">{x.better}</p>
+                                {x.why && <p className="text-amber-800/80">{x.why}</p>}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      {s.analysis.vocab?.length > 0 && (
+                        <>
+                          <p className={`font-bold ${s.analysis.improvements?.length > 0 ? 'mt-3' : ''}`}>Stronger words</p>
+                          <ul className="mt-1.5 space-y-1">
+                            {s.analysis.vocab.map((v, i) => (
+                              <li key={i}><span className="text-gray-500 line-through">{v.weak}</span> → <span className="font-semibold text-emerald-700">{v.better.join(', ')}</span></li>
+                            ))}
+                          </ul>
+                        </>
                       )}
                     </div>
                   )}
