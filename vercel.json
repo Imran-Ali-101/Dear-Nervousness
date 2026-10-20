@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/tts.py" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

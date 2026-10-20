@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #fbfbfc;
+  color: #1b1f24;
+}
+
+@keyframes dn-page-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes dn-pop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes dn-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dn-slide-left { from { transform: translateX(-100%); } to { transform: none; } }
+
+.anim-page { animation: dn-page-in 0.28s ease-out backwards; }
+.anim-pop { animation: dn-pop 0.16s ease-out backwards; transform-origin: top; }
+.anim-fade { animation: dn-fade 0.2s ease-out backwards; }
+.anim-slide-left { animation: dn-slide-left 0.25s ease-out backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-page, .anim-pop, .anim-fade, .anim-slide-left { animation: none; }
+}
