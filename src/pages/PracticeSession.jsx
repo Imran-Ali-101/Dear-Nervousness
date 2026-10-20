@@ -14,13 +14,25 @@ import Dropdown from '../components/Dropdown';
 import { LANGUAGES, PERSONAS, LEVELS, TYPES, VOICES } from '../lib/practiceOptions';
 import { hasGeminiKey } from '../lib/apiKey';
 import { addSession, updateSession } from '../lib/sessions';
-import { buildPrompt } from '../lib/prompts';
+import { useAuth } from '../hooks/useAuth';
+import { getDisplayName } from '../lib/profile';
+import { buildPrompt, buildGreeting } from '../lib/prompts';
 import { analyzeSession } from '../lib/analysis';
+import { callGemini } from '../lib/gemini';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
 const SAMPLE = { bn: 'হ্যালো, আমি তোমার স্পিকিং কোচ।', en: 'Hi, I am your speaking coach.' };
-const TTS_RETRIES = 3;
+
+const EDGE_TIMEOUT_MS = 6000;     // এক চেষ্টায় voice এতক্ষণ loading-এ থাকতে পারবে
+const MAX_RETRIES = 3;            // একই voice সর্বোচ্চ কতবার চেষ্টা হবে
+const RETRY_DELAY_MS = 600;       // দুই চেষ্টার মাঝে বিরতি
+
+// Reject if a promise takes longer than the given time
+const withTimeout = (p, ms) => Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+]);
 
 const loadSavedVoices = () => {
     try { return { ...VOICES, ...JSON.parse(localStorage.getItem('dn_voices') || '{}') }; }
@@ -40,9 +52,12 @@ export default function PracticeSession() {
     const [voices, setVoices] = useState([]);
     const [voiceByLang, setVoiceByLang] = useState(loadSavedVoices);
     const hasKey = hasGeminiKey();
+    const { user } = useAuth();
+    const [greeting, setGreeting] = useState('');
+    const userName = getDisplayName(user);
     const startedAtRef = useRef(0);
-
     // Refs always hold the latest value, so async callbacks never read stale state
+
     const activeRef = useRef(false);
     const settingsRef = useRef(null);
 
@@ -52,7 +67,11 @@ export default function PracticeSession() {
 
     const { models, model, setModel, loading: modelsLoading } = useGeminiModels();
     const { speak, stop: stopTTS, state: ttsState, getVoices } = useTTS({ voice: VOICES[language] });
-    const systemPrompt = buildPrompt({ ...cfg, language });
+    
+    const ttsStateRef = useRef('idle');
+    ttsStateRef.current = ttsState;
+    
+    const systemPrompt = buildPrompt({ ...cfg, language, userName, greeting });
     const { caption, isThinking, processAudio, liveTurns, flush, reset } = useGeminiLive(model, systemPrompt);
     
     const handleAudioReady = (base64Audio) => {
@@ -61,26 +80,73 @@ export default function PracticeSession() {
         processAudio(base64Audio, language, playAIResponse, restartListening);
     };
 
-    const { isRecording, startRecording, stopRecording } = useAudioRecorder(handleAudioReady);
+    const { isRecording, startRecording, stopRecording } = useAudioRecorder(handleAudioReady, () => restartListening());
 
-    // Speak the reply; retry on network errors (same behaviour as the deep.html prototype)
+    // One Edge voice with a watchdog: if it is still "loading" after the timeout, give up on it
+    const speakEdge = (text, voiceName) => new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (fn, value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(watchdog);
+            fn(value);
+        };
+        const watchdog = setTimeout(() => {
+            if (ttsStateRef.current === 'loading') {
+                stopTTS();   // a late answer from the stuck request will be ignored
+                finish(reject, new Error('Edge TTS timed out'));
+            }
+        }, EDGE_TIMEOUT_MS);
+        speak(text, { voice: voiceName }).then((r) => finish(resolve, r), (e) => finish(reject, e));
+    });
+    
+    // Speak the reply; when a voice fails, switch to the next voice from the list
+        // Speak the reply with the selected voice; if it fails, retry the SAME voice
     const playAIResponse = async (text) => {
         const cleanText = text.replace(/[*_#`~]/g, '');
-        for (let i = 0; i < TTS_RETRIES; i++) {
-            if (!activeRef.current) return false;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            if (!activeRef.current) return false;   // session ended meanwhile
             try {
-                await speak(cleanText, { voice: voiceRef.current });
+                await speakEdge(cleanText, voiceRef.current);
                 return true;
             } catch (err) {
-                console.error(`TTS attempt ${i + 1}/${TTS_RETRIES} failed:`, err);
-                await new Promise((r) => setTimeout(r, 1500));
+                console.error(`Edge voice attempt ${attempt}/${MAX_RETRIES} failed:`, err);
+                if (attempt < MAX_RETRIES) {
+                    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+                }
             }
         }
-        return false;
+        return false;   // all retries failed: the caller restarts the mic so the user can still talk
     };
 
     const restartListening = () => {
         if (activeRef.current) startRecording();
+    };
+
+    // The AI speaks first: greet the user by name in its own role, then start listening
+    const greetUser = async () => {
+        const first = (userName || '').trim().split(/\s+/)[0];
+        let text = '';
+        try {
+            if (model) {
+                const who = first ? `Greet me by my first name, ${first}, in one short sentence` : 'Greet me in one short sentence';
+                text = await withTimeout(callGemini(model, {
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: `The session starts now. ${who}, introduce yourself in your role in one short sentence, then ask your first question. Plain text only, 3 short sentences at most.` }] }],
+                }), 6000);
+            }
+        } catch (err) {
+            console.error('Greeting failed, using the template:', err);
+        }
+    
+        if (!activeRef.current) return;   // the session was ended while waiting
+        if (!text) text = buildGreeting({ name: userName, language, type: cfg.type, persona: cfg.persona });
+    
+        setGreeting(text);
+        const ok = await playAIResponse(text);
+        if (ok) restartListening();
+        else setTimeout(restartListening, 1500);   // TTS failed: still let the user talk
     };
 
     const endSession = () => {
@@ -91,6 +157,7 @@ export default function PracticeSession() {
         setIsSessionActive(false);
         stopRecording();
         stopTTS();
+        
         if (!live.length) return;
     
         const snapshot = () => live.map((t) => ({ ...t }));
@@ -131,13 +198,14 @@ export default function PracticeSession() {
                 return;
             }
             reset();
+            setGreeting('');
             setSaveStatus('');
             activeRef.current = true;
             startedAtRef.current = Date.now();
             setSettingsOpen(false);
             setSecondsLeft(cfg.minutes * 60);
             setIsSessionActive(true);
-            startRecording();
+            greetUser();
         }
     };
 
@@ -160,17 +228,15 @@ export default function PracticeSession() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Countdown while a session is running; the session ends when time is up
-    useEffect(() => {
-        if (!isSessionActive) return;
-        const id = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
-        return () => clearInterval(id);
-    }, [isSessionActive]);
-
-    useEffect(() => {
-        if (isSessionActive && secondsLeft <= 0) endSession();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [secondsLeft, isSessionActive]);
+        // Countdown: calculated from the start time, so it never drifts
+        useEffect(() => {
+            if (!isSessionActive) return;
+            const tick = () =>
+                setSecondsLeft(cfg.minutes * 60 - Math.floor((Date.now() - startedAtRef.current) / 1000));
+            tick();
+            const id = setInterval(tick, 1000);
+            return () => clearInterval(id);
+        }, [isSessionActive, cfg.minutes]);
 
     // Leaving the page: save a running session first, then release the microphone
     useEffect(() => () => {
@@ -228,7 +294,7 @@ export default function PracticeSession() {
                         </p>
                     </div>
                     <span className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 font-mono text-sm font-bold tabular-nums ${isSessionActive && secondsLeft <= 30 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-700'}`}>
-                        <FontAwesomeIcon icon={faStopwatch} className="text-xs" /> {fmt(secondsLeft)}
+                        <FontAwesomeIcon icon={faStopwatch} className="text-xs" /> {secondsLeft < 0 ? `+${fmt(-secondsLeft)}` : fmt(secondsLeft)}
                     </span>
 
                     {/* Settings: language, AI model, voice */}
@@ -295,9 +361,9 @@ export default function PracticeSession() {
                     )}
             
                     {/* Caption: only what the AI says */}
-                    {caption && (
+                    {(caption || greeting) && (
                         <div className="absolute inset-x-3 bottom-16 max-h-24 overflow-y-auto rounded-xl bg-black/60 px-3 py-2 text-center text-xs leading-snug text-white backdrop-blur-md md:bottom-20 md:text-sm">
-                            {caption}
+                            {caption || greeting}
                         </div>
                     )}
             

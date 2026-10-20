@@ -30,6 +30,9 @@ export const LEVELS = [
   { value: 'hard', label: 'Hard' },
 ];
 
-export const LIMITS = [5, 10, 15, 20].map((m) => ({ value: m, label: `${m} minutes` }));
+export const LIMITS = [
+  ...[5, 10, 15, 30].map((m) => ({ value: m, label: `${m} minutes` })),
+  { value: 'custom', label: 'Custom...' },
+];
 
 export const VOICES = { bn: 'bn-BD-NabanitaNeural', en: 'en-US-EricNeural' };

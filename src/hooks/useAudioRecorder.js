@@ -1,101 +1,124 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 
-export default function useAudioRecorder(onAudioReady) {
+const SPEECH_RMS = 0.015;     // a level above this means the user is speaking
+const SILENCE_MS = 1500;      // silence after speech that ends the turn
+const MIN_SPEECH_MS = 400;    // less speech than this is treated as noise
+const MAX_TURN_MS = 60000;    // hard limit for one recording
+
+// onAudioReady(base64)  -> called when the user finished speaking
+// onNoSpeech()          -> called when nothing was said (so listening can restart)
+export default function useAudioRecorder(onAudioReady, onNoSpeech) {
     const [isRecording, setIsRecording] = useState(false);
-    const mediaRecorderRef = useRef(null);
-    const streamRef = useRef(null);
-    const audioContextRef = useRef(null);
-    const analyserRef = useRef(null);
-    const silenceTimerRef = useRef(null);
+    const currentRef = useRef(null);   // the active recording { recorder, manual }
+    const busyRef = useRef(false);     // true while a recording is starting or running
+    const genRef = useRef(0);          // bumped by stopRecording to cancel a pending start
 
-    const SILENCE_RMS_THRESHOLD = 0.015;
-    const SILENCE_DURATION = 1500;
-
-    const checkAudioLevel = useCallback(() => {
-        if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
-
-        const analyser = analyserRef.current;
-        const data = new Float32Array(analyser.fftSize);
-        analyser.getFloatTimeDomainData(data);
-
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-        const rms = Math.sqrt(sum / data.length);
-
-        if (rms < SILENCE_RMS_THRESHOLD) {
-            if (!silenceTimerRef.current) {
-                silenceTimerRef.current = setTimeout(() => {
-                    if (mediaRecorderRef.current.state === 'recording') {
-                        mediaRecorderRef.current.stop();
-                    }
-                }, SILENCE_DURATION);
-            }
-        } else {
-            if (silenceTimerRef.current) {
-                clearTimeout(silenceTimerRef.current);
-                silenceTimerRef.current = null;
-            }
-        }
-        requestAnimationFrame(checkAudioLevel);
-    }, []);
+    // Always call the latest callbacks, never a stale copy
+    const readyRef = useRef(onAudioReady);
+    const noSpeechRef = useRef(onNoSpeech);
+    readyRef.current = onAudioReady;
+    noSpeechRef.current = onNoSpeech;
 
     const startRecording = async () => {
+        if (busyRef.current) return;   // never run two recordings at once
+        busyRef.current = true;
+        const gen = genRef.current;
+        let stream = null;
+        let ctx = null;
+
+        const release = () => {
+            if (stream) stream.getTracks().forEach((t) => t.stop());
+            if (ctx && ctx.state !== 'closed') ctx.close().catch(() => {});
+            busyRef.current = false;
+        };
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            streamRef.current = stream;
-            
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            mediaRecorderRef.current = mediaRecorder;
-            
-            let audioChunks = [];
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true },
+            });
+            // The session was ended while we were waiting for the microphone
+            if (gen !== genRef.current) { release(); return; }
 
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            audioContextRef.current = audioContext;
-            
-            const analyser = audioContext.createAnalyser();
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            ctx = new (window.AudioContext || window.webkitAudioContext)();
+            // On mobile the context can start suspended, which makes the level read zero
+            if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+
+            const analyser = ctx.createAnalyser();
             analyser.fftSize = 512;
-            analyserRef.current = analyser;
-            
-            const microphone = audioContext.createMediaStreamSource(stream);
-            microphone.connect(analyser);
+            ctx.createMediaStreamSource(stream).connect(analyser);
+            const data = new Float32Array(analyser.fftSize);
 
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data);
+            const cur = { recorder, manual: false };
+            currentRef.current = cur;
+
+            const chunks = [];
+            let speechMs = 0;      // total time above the speech level
+            let silentSince = 0;   // when the current silence began (0 = not silent)
+            let hasSpoken = false;
+            const startedAt = Date.now();
+            let last = startedAt;
+
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
             };
 
-            mediaRecorder.onstop = () => {
-                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                    audioContextRef.current.close();
-                }
-                if (streamRef.current) {
-                    streamRef.current.getTracks().forEach(track => track.stop());
+            // Poll the volume; the silence timer only runs after real speech was heard
+            const timer = setInterval(() => {
+                if (recorder.state !== 'recording') return;
+                const now = Date.now();
+                const dt = now - last;
+                last = now;
+
+                analyser.getFloatTimeDomainData(data);
+                let sum = 0;
+                for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+                const rms = Math.sqrt(sum / data.length);
+
+                if (rms >= SPEECH_RMS) {
+                    speechMs += dt;
+                    silentSince = 0;
+                    if (speechMs >= MIN_SPEECH_MS) hasSpoken = true;
+                } else if (hasSpoken) {
+                    if (!silentSince) silentSince = now;
+                    if (now - silentSince >= SILENCE_MS) recorder.stop();
                 }
 
-                if (audioChunks.length > 0) {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        const base64Audio = reader.result.split(',')[1];
-                        onAudioReady(base64Audio);
-                    };
+                if (now - startedAt >= MAX_TURN_MS) recorder.stop();
+            }, 50);
+
+            recorder.onstop = () => {
+                clearInterval(timer);
+                currentRef.current = null;
+                release();
+                setIsRecording(false);
+
+                if (!hasSpoken || chunks.length === 0) {
+                    // Nothing was said: listen again instead of sending silence to Gemini
+                    if (!cur.manual) noSpeechRef.current?.();
+                    return;
                 }
+
+                const reader = new FileReader();
+                reader.onloadend = () => readyRef.current(reader.result.split(',')[1]);
+                reader.readAsDataURL(new Blob(chunks, { type: 'audio/webm' }));
             };
 
-            mediaRecorder.start();
+            recorder.start();
             setIsRecording(true);
-            checkAudioLevel();
-
         } catch (err) {
-            console.error("Microphone permission denied!", err);
+            console.error('Microphone error:', err);
+            release();
             setIsRecording(false);
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
+        genRef.current++;
+        const cur = currentRef.current;
+        if (cur) {
+            cur.manual = true;
+            if (cur.recorder.state === 'recording') cur.recorder.stop();
         }
         setIsRecording(false);
     };

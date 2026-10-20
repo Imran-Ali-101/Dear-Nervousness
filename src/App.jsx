@@ -13,6 +13,7 @@ import Info from './pages/Info';
 import TongueTwister from './pages/TongueTwister';
 import Settings from './pages/Settings';
 import Account from './pages/Account';
+import QuotaDialog from './components/QuotaDialog';
 
 // Full-screen pages (no tabs) replay the enter animation when they mount
 const Page = ({ children }) => <div className="anim-page">{children}</div>;
@@ -44,6 +45,7 @@ function App() {
                 <Route path="/settings/account" element={<Page><Account /></Page>} />
               </Route>
             </Routes>
+            <QuotaDialog />
           </AuthProvider>
       </Router>
   );

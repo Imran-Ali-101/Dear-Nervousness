@@ -10,23 +10,19 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-        setUserScope(data.session?.user?.id);
-        setSession(data.session);
-        setLoading(false);
-        if (data.session) syncSessions();
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setUserScope(s?.user?.id);
-      setSession(s);
-      const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-          setUserScope(s?.user?.id);
-          setSession(s);
-          if (event === 'SIGNED_IN') setTimeout(syncSessions, 0);
-        });
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  supabase.auth.getSession().then(({ data }) => {
+    setUserScope(data.session?.user?.id);
+    setSession(data.session);
+    setLoading(false);
+    if (data.session) syncSessions();
+  });
+  const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+    setUserScope(s?.user?.id);
+    setSession(s);
+    if (event === 'SIGNED_IN') setTimeout(syncSessions, 0);
+  });
+  return () => sub.subscription.unsubscribe();
+}, []);
 
   const value = {
     session,

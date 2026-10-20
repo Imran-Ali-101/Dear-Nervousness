@@ -25,7 +25,7 @@ const TEXTAREA = 'mt-2 w-full resize-none rounded-xl border border-gray-200 bg-w
 
 function Panel({ n, color, title, subtitle, children }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <section className="rounded-2xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white p-4">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-white ${color}`}>{n}</span>
         <div className="min-w-0">
@@ -68,7 +68,7 @@ export default function Dashboard() {
   // Wake the TTS server early so the first AI voice is not slow
   useEffect(() => { fetch(`${import.meta.env.VITE_TTS_URL || ''}/api/health`).catch(() => {}); }, []);
   const [tab, setTab] = useState('confidence');
-  const [setup, setSetup] = useState({ language: getDefaultLang(), type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '' });
+  const [setup, setSetup] = useState({ language: getDefaultLang(), type: 'interview', persona: 'software', level: 'medium', minutes: 10, customMinutes: 20, customPersona: '', customPrompt: '' });
   const [hasKey] = useState(hasGeminiKey);
   const sessions = useSessions();
   const streak = getStreak(sessions);
@@ -89,7 +89,12 @@ export default function Dashboard() {
   const fmtDur = (sec) => `${Math.floor(sec / 60)}m ${sec % 60}s`;
 
   const set = (key) => (value) => setSetup((s) => ({ ...s, [key]: value }));
-  const start = () => navigate('/warmup', { state: setup });
+  const start = () => {
+      // Custom time: keep it between 1 and 180 minutes
+      const custom = Math.min(Math.max(parseInt(setup.customMinutes, 10) || 1, 1), 180);
+      const minutes = setup.minutes === 'custom' ? custom : setup.minutes;
+      navigate('/warmup', { state: { ...setup, minutes } });
+  };
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-8">
@@ -172,6 +177,11 @@ export default function Dashboard() {
             <div>
               <p className="mb-2 text-sm font-semibold text-gray-700">Time Limit</p>
               <Dropdown value={setup.minutes} options={LIMITS} onChange={set('minutes')} />
+              {setup.minutes === 'custom' && (
+                <input type="number" inputMode="numeric" min="1" max="180" value={setup.customMinutes}
+                  onChange={(e) => set('customMinutes')(e.target.value)} placeholder="Minutes (1-180)"
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+              )}
             </div>
           </div>
 

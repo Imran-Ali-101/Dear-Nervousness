@@ -1,4 +1,5 @@
 import { PERSONA_PROMPTS } from './practiceOptions';
+import { scoped } from './userScope';
 
 const KEY = 'dn_general_prompt';
 
@@ -18,7 +19,7 @@ export const getGeneralPrompt = () => {
 // Empty text = go back to the default prompt
 export const setGeneralPrompt = (text) => {
   try {
-    if (text.trim()) localStorage.setItem(scopef(KEY), text.trim());
+    if (text.trim()) localStorage.setItem(scoped(KEY), text.trim());
     else localStorage.removeItem(scoped(KEY));
   } catch { /* ignore */ }
 };
@@ -34,7 +35,7 @@ const LEVEL_HINT = {
 };
 
 // Final prompt = General + type + persona/custom + difficulty + user's custom prompt + language
-export function buildPrompt({ language, type, persona, level, customPersona, customPrompt }) {
+export function buildPrompt({ language, type, persona, level, customPersona, customPrompt, userName, greeting }) {
   const role = persona === 'custom' ? customPersona?.trim() : PERSONA_PROMPTS[persona];
   return [
     getGeneralPrompt(),
@@ -42,6 +43,37 @@ export function buildPrompt({ language, type, persona, level, customPersona, cus
     role && `Your role: ${role}`,
     LEVEL_HINT[level],
     customPrompt?.trim() && `Extra instructions from the user: ${customPrompt.trim()}`,
+    userName && `The user's name is ${userName}. Use it only now and then, not in every reply.`,
+    greeting && `You have already greeted the user and said: "${greeting}" Do not greet again; respond to their answer.`,
     language === 'bn' ? 'Always reply in Bengali script.' : 'Always reply in English.',
   ].filter(Boolean).join('\n');
+}
+
+// The first thing the AI says when a session starts (local template: no network wait)
+export function buildGreeting({ name, language, type, persona }) {
+  const first = (name || '').trim().split(/\s+/)[0];
+  const bn = language === 'bn';
+
+  const hello = bn
+    ? (first ? `হ্যালো ${first}, স্বাগতম!` : 'হ্যালো, স্বাগতম!')
+    : (first ? `Hi ${first}, welcome!` : 'Hi, welcome!');
+
+  const intro = {
+    en: {
+      software: 'I will be your interviewer for this software engineering interview.',
+      hr: 'I will be your HR interviewer today.',
+      tutor: 'I am your speaking coach.',
+    },
+    bn: {
+      software: 'আজকের সফটওয়্যার ইঞ্জিনিয়ারিং ইন্টারভিউতে আমি তোমার ইন্টারভিউয়ার।',
+      hr: 'আজ আমি তোমার এইচআর ইন্টারভিউয়ার।',
+      tutor: 'আমি তোমার স্পিকিং কোচ।',
+    },
+  }[bn ? 'bn' : 'en'][persona] || '';
+
+  const ask = type === 'interview'
+    ? (bn ? 'চলো শুরু করি। প্রথমে নিজের সম্পর্কে একটু বলো।' : "Let's begin. Could you please tell me a little about yourself?")
+    : (bn ? 'চলো শুরু করি। আজ কী নিয়ে কথা বলতে চাও?' : "Let's begin. What would you like to talk about today?");
+
+  return [hello, intro, ask].filter(Boolean).join(' ');
 }
