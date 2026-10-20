@@ -5,6 +5,8 @@ const PAGES = {
   manual: 'User Manual',
   privacy: 'Privacy Policy',
   terms: 'Terms & Conditions',
+  help: 'Help & Support',
+  about: 'About App',
 };
 
 export default function Info() {

@@ -11,6 +11,7 @@ import { LANGUAGES, TYPES, PERSONAS, LEVELS, LIMITS } from '../lib/practiceOptio
 import { hasGeminiKey } from '../lib/apiKey';
 import { getStreak, practicedToday, useSessions } from '../lib/sessions';
 import { buildStats } from '../lib/stats';
+import { getDefaultLang } from '../lib/prefs';
 
 const TONES = {
   green: 'border-emerald-100 bg-emerald-50 text-emerald-700',
@@ -61,7 +62,7 @@ function EmptyState({ icon, text }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('confidence');
-  const [setup, setSetup] = useState({ language: 'bn', type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '' });
+  const [setup, setSetup] = useState({ language: getDefaultLang(), type: 'interview', persona: 'software', level: 'medium', minutes: 10, customPersona: '', customPrompt: '' });
   const [hasKey] = useState(hasGeminiKey);
   const sessions = useSessions();
   const streak = getStreak(sessions);

@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faArrowLeft, faKey, faEye, faEyeSlash, faCircleCheck, faTriangleExclamation,
-  faTrash, faShieldHalved, faArrowUpRightFromSquare, faSpinner,
+  faArrowLeft, faKey, faEye, faEyeSlash, faCircleCheck, faTriangleExclamation, faTrash,
+  faShieldHalved, faArrowUpRightFromSquare, faSpinner, faUser, faBell, faMoon, faGlobe,
+  faCircleQuestion, faCircleInfo, faWandMagicSparkles, faChevronRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { getGeminiKey, setGeminiKey, clearGeminiKey } from '../lib/apiKey';
+import { getGeneralPrompt, setGeneralPrompt, DEFAULT_GENERAL_PROMPT } from '../lib/prompts';
+import { getTheme, setTheme, getDefaultLang, setDefaultLang } from '../lib/prefs';
 
 // Cheap request that fails if the key is invalid
 async function verifyKey(key) {
@@ -14,13 +17,77 @@ async function verifyKey(key) {
   if (data.error) throw new Error(data.error.message);
 }
 
+function Block({ icon, title, sub, children }) {
+  return (
+    <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <FontAwesomeIcon icon={icon} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-bold text-gray-900">{title}</h2>
+          <p className="text-xs text-gray-500">{sub}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Row({ icon, title, sub, onClick, soon, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={soon}
+      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        danger ? 'border-red-100 bg-red-50 hover:bg-red-100' : 'border-gray-100 bg-white hover:bg-gray-50'
+      }`}
+    >
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${danger ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+        <FontAwesomeIcon icon={icon} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-sm font-semibold ${danger ? 'text-red-600' : 'text-gray-900'}`}>{title}</span>
+        {sub && <span className={`block truncate text-xs ${danger ? 'text-red-400' : 'text-gray-500'}`}>{sub}</span>}
+      </span>
+      {soon
+        ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Soon</span>
+        : <FontAwesomeIcon icon={faChevronRight} className="text-xs text-gray-300" />}
+    </button>
+  );
+}
+
+function Segmented({ value, options, onChange }) {
+  return (
+    <div className="mt-4 grid rounded-xl bg-gray-100 p-1 text-sm font-semibold" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+      {options.map(([v, label]) => (
+        <button key={v} onClick={() => onChange(v)} className={`rounded-lg py-2 transition ${value === v ? 'bg-blue-600 text-white shadow' : 'text-gray-500'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Settings() {
   const navigate = useNavigate();
+
+  // Gemini key
   const [saved, setSaved] = useState(getGeminiKey());
   const [input, setInput] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState(null); // { ok: boolean, text: string }
+  const [msg, setMsg] = useState(null); // { ok, text }
+
+  // General prompt, theme, default language
+  const [prompt, setPrompt] = useState(getGeneralPrompt);
+  const [promptMsg, setPromptMsg] = useState('');
+  const [theme, setThemeState] = useState(getTheme);
+  const [lang, setLang] = useState(getDefaultLang);
+
+  // Account deletion (the request is only stored on this device for now)
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delMsg, setDelMsg] = useState('');
 
   const save = async () => {
     const key = input.trim();
@@ -46,29 +113,41 @@ export default function Settings() {
     setMsg({ ok: true, text: 'API key removed from this device.' });
   };
 
+  const savePrompt = () => {
+    setGeneralPrompt(prompt);
+    setPromptMsg('General prompt saved.');
+    setTimeout(() => setPromptMsg(''), 2500);
+  };
+
+  const resetPrompt = () => {
+    setGeneralPrompt('');
+    setPrompt(DEFAULT_GENERAL_PROMPT);
+    setPromptMsg('Reset to the default prompt.');
+    setTimeout(() => setPromptMsg(''), 2500);
+  };
+
+  const requestDeletion = () => {
+    try { localStorage.setItem('dn_deletion_requested', String(Date.now())); } catch { /* ignore */ }
+    setConfirmDel(false);
+    setDelMsg('Your deletion request was recorded. It will be sent to the server once accounts are connected.');
+  };
+
   return (
     <div className="min-h-[100dvh] bg-[#f6f8fc] text-[#1b1f24]">
       <header className="border-b border-gray-200 bg-white px-3 py-3 md:px-6">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <button onClick={() => navigate('/')} aria-label="Back to dashboard" className="rounded-lg px-2.5 py-2 text-gray-700 hover:bg-gray-100">
+          <button onClick={() => navigate(-1)} aria-label="Back" className="rounded-lg px-2.5 py-2 text-gray-700 hover:bg-gray-100">
             <FontAwesomeIcon icon={faArrowLeft} />
           </button>
           <h1 className="text-lg font-bold text-gray-900">Settings</h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-3 py-6 md:px-6 md:py-8">
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <FontAwesomeIcon icon={faKey} />
-            </span>
-            <div>
-              <h2 className="font-bold text-gray-900">Gemini API Key</h2>
-              <p className="text-xs text-gray-500">Required to practice. Each user uses their own key.</p>
-            </div>
-          </div>
+      <main className="mx-auto flex max-w-3xl flex-col gap-3 px-3 py-6 md:px-6 md:py-8">
+        <Row icon={faUser} title="Account Settings" sub="Manage your profile and preferences" soon />
 
+        {/* Gemini API key */}
+        <Block icon={faKey} title="Gemini API Key" sub="Required to practice. Each user uses their own key.">
           {saved && (
             <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
               <span className="flex items-center gap-2.5 text-sm font-semibold text-emerald-800">
@@ -120,8 +199,65 @@ export default function Settings() {
             <FontAwesomeIcon icon={faShieldHalved} className="mt-0.5 text-gray-400" />
             <p>Your key is stored only in this browser and is sent directly to Google. It is never sent to our servers. Remove it any time, and do not use this feature on a shared computer.</p>
           </div>
-        </section>
+        </Block>
+
+        {/* General prompt */}
+        <Block icon={faWandMagicSparkles} title="General Prompt" sub="Base instructions for every practice session">
+          <textarea
+            rows={8}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            spellCheck={false}
+            className="mt-4 w-full resize-y rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm leading-relaxed focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          />
+          <p className="mt-2 text-xs text-gray-500">
+            The persona, difficulty and custom prompt are added after this text. Keep "plain text, no markdown" in it, because the reply is read aloud.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <button onClick={savePrompt} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700">Save</button>
+            <button onClick={resetPrompt} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">Reset to default</button>
+            {promptMsg && <span className="text-xs font-semibold text-emerald-700">{promptMsg}</span>}
+          </div>
+        </Block>
+
+        <Row icon={faBell} title="Notifications" sub="Control your notifications" soon />
+
+        <Block icon={faMoon} title="Appearance" sub="Light / Dark mode">
+          <Segmented
+            value={theme}
+            options={[['light', 'Light'], ['dark', 'Dark'], ['system', 'System']]}
+            onChange={(v) => { setThemeState(v); setTheme(v); }}
+          />
+        </Block>
+
+        <Block icon={faGlobe} title="Language" sub="Default practice language">
+          <Segmented
+            value={lang}
+            options={[['bn', 'Bengali'], ['en', 'English']]}
+            onChange={(v) => { setLang(v); setDefaultLang(v); }}
+          />
+        </Block>
+
+        <Row icon={faCircleQuestion} title="Help & Support" onClick={() => navigate('/info/help')} />
+        <Row icon={faCircleInfo} title="About App" onClick={() => navigate('/info/about')} />
+
+        {/* Always the last item */}
+        <Row icon={faTriangleExclamation} title="Request Account Deletion" sub="Permanently deletes in 7 days" danger onClick={() => setConfirmDel(true)} />
+        {delMsg && <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">{delMsg}</p>}
       </main>
+
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setConfirmDel(false)}>
+          <div className="anim-pop w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-gray-900">Request account deletion?</h3>
+            <p className="mt-2 text-sm text-gray-600">Your account and all its data will be permanently deleted in 7 days.</p>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setConfirmDel(false)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={requestDeletion} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700">Request deletion</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

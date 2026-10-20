@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faHouse, faBullseye, faLanguage, faClockRotateLeft, faEllipsis, faUser, faSeedling,
+  faGear, faCircleQuestion, faRightFromBracket,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
@@ -23,8 +25,60 @@ function Logo() {
   );
 }
 
-export default function AppShell() {
+function ProfileMenu() {
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  const items = [
+    { icon: faGear, label: 'Settings', run: () => navigate('/settings') },
+    { icon: faCircleQuestion, label: 'Help', run: () => navigate('/info/help') },
+    // TODO: call supabase.auth.signOut() here once login is added
+    { icon: faRightFromBracket, label: 'Logout', run: () => navigate('/auth'), danger: true },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Profile menu"
+        aria-expanded={open}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 transition hover:bg-blue-200"
+      >
+        <FontAwesomeIcon icon={faUser} />
+      </button>
+
+      {open && (
+        <div className="anim-pop absolute right-0 top-full mt-2 w-48 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              onClick={() => { setOpen(false); it.run(); }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                it.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <FontAwesomeIcon icon={it.icon} fixedWidth /> {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AppShell() {
   const { pathname } = useLocation();
 
   return (
@@ -59,13 +113,7 @@ export default function AppShell() {
       <div className="lg:ml-64">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur md:px-8">
           <div className="lg:hidden"><Logo /></div>
-          <button
-            onClick={() => navigate('/settings')}
-            aria-label="Settings"
-            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600"
-          >
-            <FontAwesomeIcon icon={faUser} />
-          </button>
+          <div className="ml-auto"><ProfileMenu /></div>
         </header>
 
         {/* Page content; the key replays the enter animation on each tab change */}
