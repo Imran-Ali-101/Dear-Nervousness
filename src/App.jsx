@@ -27,6 +27,8 @@ function App() {
               {/* Public pages */}
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Page><Auth /></Page>} />
+              <Route path="/privacy" element={<Page><Info slug="privacy" standalone /></Page>} />
+              <Route path="/terms" element={<Page><Info slug="terms" standalone /></Page>} />
     
               {/* Logged-in pages only */}
               <Route element={<RequireAuth />}>
