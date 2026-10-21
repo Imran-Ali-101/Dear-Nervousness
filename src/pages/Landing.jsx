@@ -34,8 +34,7 @@ export default function Landing() {
             <span className="text-lg font-bold">Dear <span className="text-blue-600">Nervousness</span></span>
           </Link>
           <div className="flex items-center gap-2">
-            <Link to="/auth" className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">Log in</Link>
-            <Link to="/auth" state={{ mode: 'signup' }} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700">Get started</Link>
+            <Link to="/auth" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700">Sign in</Link>
           </div>
         </div>
       </header>
@@ -94,13 +93,17 @@ export default function Landing() {
         </ul>
         <div className="mt-8">
           <Link to="/auth" className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700">
-            Create free account <FontAwesomeIcon icon={faArrowRight} />
+            Get started free <FontAwesomeIcon icon={faArrowRight} />
           </Link>
         </div>
       </section>
 
       <footer className="border-t border-gray-100 py-6 text-center text-xs text-gray-400">
-        Dear Nervousness. Small steps every day create big changes.
+          <div className="mb-2 flex items-center justify-center gap-4">
+            <Link to="/privacy" className="font-semibold text-gray-500 hover:text-blue-600">Privacy Policy</Link>
+            <Link to="/terms" className="font-semibold text-gray-500 hover:text-blue-600">Terms & Conditions</Link>
+          </div>
+          Dear Nervousness. Small steps every day create big changes.
       </footer>
     </div>
   );

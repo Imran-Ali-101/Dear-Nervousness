@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGithub, faLinkedinIn } from '@fortawesome/free-brands-svg-icons';
+import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import {
   faBook, faShieldHalved, faFileContract, faCircleQuestion, faCircleInfo,
   faEnvelope, faChevronDown, faGraduationCap, faHeart,
@@ -93,7 +93,7 @@ function Privacy() {
 
       <Section n="1" title="What we store in your account">
         <List items={[
-          'Account details: your email, display name and profile photo link (from email sign-up, Google, GitHub or LinkedIn).',
+          'Account details: your email, display name and profile photo link (from Google or GitHub).',
           'Results of each session: date, length, language, practice type, scores (confidence, clarity, grammar), speaking pace, filler words, pauses, camera presence scores, feedback and tips.',
           'Conversation text: what you said (as text) and the AI’s replies, saved with your sessions so you can read them again in History.',
         ]} />
@@ -125,7 +125,7 @@ function Privacy() {
           <><b>Google Gemini</b>: your voice and text go from your browser straight to Google, using your own API key, to transcribe and evaluate your practice. Google’s own terms and privacy policy apply to that data.</>,
           <><b>Text-to-speech</b>: the AI’s reply text (not your voice) is sent to our server function, which gets the spoken audio from Microsoft’s Edge text-to-speech service.</>,
           <><b>Vercel</b>: hosts the app and the speech function, and may keep standard server logs such as IP addresses.</>,
-          <><b>Google, GitHub, LinkedIn</b>: only if you choose to sign in with them.</>,
+          <><b>Google, GitHub</b>: only if you choose to sign in with them.</>,
         ]} />
         <P>We do not sell your data. There are no ads and no third-party analytics or trackers in the app.</P>
       </Section>
@@ -161,7 +161,7 @@ function Privacy() {
 function Terms() {
   return (
     <PageShell icon={faFileContract} title="Terms & Conditions" subtitle="Simple rules for using Dear Nervousness" updated>
-      <Note>By creating an account or using the app, you agree to these terms. If you do not agree, please do not use it.</Note>
+      <Note>By signing in or using the app, you agree to these terms. If you do not agree, please do not use it.</Note>
 
       <Section n="1" title="What this app is">
         <P>
@@ -244,7 +244,7 @@ function Manual() {
     <PageShell icon={faBook} title="User Manual" subtitle="From first sign-in to your first report">
       <Section n="1" title="Quick start">
         <List items={[
-          <><b>Sign in</b> with email, Google, GitHub or LinkedIn.</>,
+          <><b>Sign in</b> with Google or GitHub.</>,
           <><b>Add your Gemini API key</b> in Settings. The Help page shows how to get a free one.</>,
           <>Open <b>Practice</b> and choose the language, type, persona, level and time.</>,
           <>Optional: tap <b>Turn on camera</b> to get presence scores.</>,
