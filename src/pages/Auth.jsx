@@ -6,9 +6,9 @@ import { faEnvelope, faLock, faUser, faArrowRight, faSpinner } from '@fortawesom
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Splash } from '../components/RequireAuth';
+import GoogleButton from '../components/GoogleButton';
 
-const PROVIDERS = [
-  { id: 'google', label: 'Google', icon: faGoogle },
+const OTHER_PROVIDERS = [
   { id: 'github', label: 'GitHub', icon: faGithub },
   { id: 'linkedin_oidc', label: 'LinkedIn', icon: faLinkedinIn },
 ];
@@ -67,13 +67,25 @@ export default function Auth() {
           <h1 className="text-xl font-bold text-gray-900">{isLogin ? 'Welcome back' : 'Create your account'}</h1>
           <p className="mt-1 text-sm text-gray-500">{isLogin ? 'Log in to continue your practice.' : 'Start practicing with confidence.'}</p>
 
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            {PROVIDERS.map((p) => (
-              <button key={p.id} type="button" onClick={() => oauth(p.id)} aria-label={`Continue with ${p.label}`}
-                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
-                <FontAwesomeIcon icon={p.icon} /> <span className="hidden sm:inline">{p.label}</span>
-              </button>
-            ))}
+          <div className="mt-5 space-y-2">
+            <GoogleButton
+              text={isLogin ? 'signin_with' : 'signup_with'}
+              onError={setError}
+              fallback={
+                <button type="button" onClick={() => oauth('google')}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+                <FontAwesomeIcon icon={faGoogle} /> Continue with Google
+                </button>
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              {OTHER_PROVIDERS.map((p) => (
+                <button key={p.id} type="button" onClick={() => oauth(p.id)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+                  <FontAwesomeIcon icon={p.icon} /> {p.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
