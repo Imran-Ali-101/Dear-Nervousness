@@ -39,13 +39,14 @@ export default function Report() {
   const sessions = useSessions();
   const s = sessions.find((x) => x.startedAt === Number(startedAt));
   const a = s?.analysis;
+  const done = !!(a && (a.summary || a.confidence != null));
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (a) return;
-    const id = setTimeout(() => setTimedOut(true), WAIT_MS);
-    return () => clearTimeout(id);
-  }, [a]);
+      if (done) return;
+      const id = setTimeout(() => setTimedOut(true), WAIT_MS);
+      return () => clearTimeout(id);
+  }, [done]);
 
   const header = (
     <header className="border-b border-gray-200 bg-white px-3 py-3 md:px-6">
@@ -60,7 +61,7 @@ export default function Report() {
 
   const body = (() => {
     if (!s) return <p className="py-16 text-center text-sm text-gray-500">This report was not found.</p>;
-    if (!a) {
+    if (!done && !(a && timedOut)) {
       return timedOut ? (
         <p className="py-16 text-center text-sm text-gray-500">The report could not be prepared for this session.</p>
       ) : (
@@ -100,6 +101,30 @@ export default function Report() {
           </div>
         )}
 
+
+        {a.visual && !a.visual.lowVisibility && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-gray-900">Presence on camera</p>
+                    <p className={`text-2xl font-extrabold ${tone(a.visual.presence)}`}>{a.visual.presence}<span className="text-sm">%</span></p>
+                </div>
+                <div className="mt-3 flex flex-col gap-2.5">
+                    {[['Eye contact', a.visual.eyeContact], ['Smile time', a.visual.smile], ['Steadiness', a.visual.steadiness], ['Framing', a.visual.framing]].map(([label, v]) => (
+                        <div key={label}>
+                            <div className="flex justify-between text-xs text-gray-500"><span>{label}</span><span className="font-semibold text-gray-700">{v}%</span></div>
+                            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-blue-500" style={{ width: `${v}%` }} /></div>
+                        </div>
+                    ))}
+                </div>
+                <p className="mt-3 text-[11px] text-gray-400">Estimated on your device from the camera. Your video is never saved.</p>
+            </div>
+        )}
+        {a.visual?.lowVisibility && (
+            <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                Your face was visible only {a.visual.faceVisible}% of the time, so camera scores were skipped. Try better light and keep your face in the frame.
+            </p>
+        )}
+        
         <div className="grid grid-cols-2 gap-3">
           <Stat label="Speaking pace" value={a.wpm != null ? `${a.wpm} WPM` : null} hint={paceHint(a.wpm)} />
           <Stat label="Filler words" value={a.fillerCount} hint={a.fillersPerMin != null ? `${a.fillersPerMin}/min · ${fillerHint(a.fillersPerMin)}` : ''} />

@@ -21,6 +21,8 @@ import { callGemini } from '../lib/gemini';
 import useCamera from '../hooks/useCamera';
 import CameraConsent from '../components/CameraConsent';
 import { hasCameraConsent, giveCameraConsent } from '../lib/cameraConsent';
+import useFaceAnalysis from '../hooks/useFaceAnalysis';
+import FaceLoadingDialog from '../components/FaceLoadingDialog';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -53,14 +55,33 @@ export default function PracticeSession() {
     const [saveStatus, setSaveStatus] = useState('');
 
     const { videoRef, status: camStatus, start: startCamera, stop: stopCamera } = useCamera();
+    const camLoading = camStatus === 'starting' || camStatus === 'on';
+    const {
+        ready: faceReady,
+        error: faceError,
+        progress: faceProgress,
+        live: faceLive,
+        debug: faceDebug,
+        retry: retryFace,
+        reset: resetFace,
+        getVisual,
+    } = useFaceAnalysis({ videoRef, cameraOn: camStatus === 'on', load: camLoading, active: isSessionActive });
+    
+    const [faceHidden, setFaceHidden] = useState(false);
+    const showFaceDialog = camLoading && !isSessionActive && !faceHidden && (!faceReady || faceError);
+    
     const [consentOpen, setConsentOpen] = useState(false); 
     const turnOnCamera = () => {
-        if (hasCameraConsent()) startCamera();   // already agreed once
+        if (hasCameraConsent()) {
+            setFaceHidden(false);
+            startCamera();   // already agreed once
+        }
         else setConsentOpen(true);               // first time: explain first
     };
     const acceptConsent = () => {
         giveCameraConsent();
         setConsentOpen(false);
+        setFaceHidden(false);
         startCamera();
     };
     
@@ -173,10 +194,15 @@ export default function PracticeSession() {
         stopRecording();
         stopTTS();
         
-        if (!live.length) return;
+        if (!live.length) {
+            setSaveStatus('No speech was recorded, so there is no report this time.');
+            setTimeout(() => setSaveStatus(''), 4000);
+            return;
+        }
     
         const snapshot = () => live.map((t) => ({ ...t }));
-    
+
+        const visual = getVisual();
         // 1) Save right away, so nothing is lost
         addSession({
             startedAt,
@@ -187,6 +213,7 @@ export default function PracticeSession() {
             level: cfg.level,
             turns: snapshot(),
         });
+        if (visual) updateSession(startedAt, { analysis: { visual } });
         setSaveStatus('Saved ✓ Analyzing in background...');
         setTimeout(() => setSaveStatus(''), 3000);
     
@@ -195,7 +222,7 @@ export default function PracticeSession() {
             await flush();
             const turns = snapshot();
             updateSession(startedAt, { turns });
-            await runAnalysis(startedAt, { model, language, turns });
+            await runAnalysis(startedAt, { model, language, turns, visual });
         })();
     };
 
@@ -209,6 +236,7 @@ export default function PracticeSession() {
             endSession();
             if (hadTurns) navigate(`/report/${startedAt}`);
         } else {
+            resetFace();
             // Each user needs their own Gemini key
             if (!hasKey) {
                 navigate('/settings');
@@ -390,6 +418,22 @@ export default function PracticeSession() {
                     {camStatus === 'on' && (
                         <button onClick={stopCamera} className="absolute right-3 top-14 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur-md hover:bg-black/70">Turn off camera</button>
                     )}
+
+                    {/* Camera detect */}
+                    {isSessionActive && camStatus === 'on' && (
+                        <span className="absolute left-3 top-14 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md">
+                            {faceError ? 'Face analysis unavailable'
+                                : !faceReady ? `Loading face analysis… ${faceProgress}%`
+                                : !faceLive.face ? 'Face not visible'
+                                : faceLive.eye ? '● Eye contact'
+                                : '○ Look at the camera'}
+                        </span>
+                    )}
+                    {faceDebug && isSessionActive && faceLive.raw && (
+                        <span className="absolute left-3 top-24 rounded-lg bg-black/60 px-2 py-1 font-mono text-[10px] text-white">
+                            yaw {faceLive.raw.yawDev.toFixed(2)} h {faceLive.raw.h.toFixed(2)} v {faceLive.raw.v.toFixed(2)} smile {faceLive.raw.smile.toFixed(2)} w {faceLive.raw.width.toFixed(2)}
+                        </span>
+                    )}
             
                     <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 backdrop-blur-md">
                         <span className={`h-2 w-2 rounded-full ${isSessionActive ? 'animate-pulse bg-red-500' : 'bg-gray-400'}`} />
@@ -431,6 +475,13 @@ export default function PracticeSession() {
                 </div>
             </footer>
             <CameraConsent open={consentOpen} onAccept={acceptConsent} onCancel={() => setConsentOpen(false)} />
+            <FaceLoadingDialog
+                open={showFaceDialog}
+                progress={faceProgress}
+                error={faceError}
+                onHide={() => setFaceHidden(true)}
+                onRetry={() => { setFaceHidden(false); retryFace(); }}
+            />
         </div>
     );
 }

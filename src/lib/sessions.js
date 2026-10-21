@@ -154,11 +154,11 @@ const pickModel = () => {
   catch { return 'gemini-3.1-flash-lite'; }
 };
 
-export const runAnalysis = async (startedAt, { model, language, turns }) => {
+export const runAnalysis = async (startedAt, { model, language, turns, visual }) => {
   if (analyzing.has(startedAt)) return;
   analyzing.add(startedAt);
   const analysis = await analyzeSession({ model, language, turns });
-  if (analysis) updateSession(startedAt, { analysis });
+  if (analysis) updateSession(startedAt, { analysis: visual ? { ...analysis, visual } : analysis });
 };
 
 // Sessions of the last 24h that have a conversation but no finished analysis
@@ -168,5 +168,5 @@ export const analyzePending = async () => {
     !s.analysis?.summary &&
     Date.now() - s.startedAt < 864e5 &&
     Array.isArray(s.turns) && s.turns.some((t) => t.userText));
-  for (const s of todo) await runAnalysis(s.startedAt, { model: pickModel(), language: s.language, turns: s.turns });
+  for (const s of todo) await runAnalysis(s.startedAt, { model: pickModel(), language: s.language, turns: s.turns, visual: s.analysis?.visual });
 };
