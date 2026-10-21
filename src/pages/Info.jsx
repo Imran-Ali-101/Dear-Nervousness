@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGithub } from '@fortawesome/free-brands-svg-icons';
+import { faGithub, faLinkedinIn } from '@fortawesome/free-brands-svg-icons';
 import {
   faBook, faShieldHalved, faFileContract, faCircleQuestion, faCircleInfo,
   faEnvelope, faChevronDown, faGraduationCap, faHeart,
