@@ -350,7 +350,7 @@ BBC_FEEDS = {
 AJ_FEED = "https://www.aljazeera.com/xml/rss/all.xml"
 CC_NAMES = {"BD": "Bangladesh", "US": "United States", "GB": "United Kingdom", "IN": "India", "PK": "Pakistan",
             "AU": "Australia", "CA": "Canada", "SA": "Saudi Arabia", "AE": "UAE", "MY": "Malaysia", "SG": "Singapore"}
-LOCAL_RATIO = 2  # local stories per 1 international story
+LOCAL_RATIO = 4  # local stories per 1 international story
 TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -420,11 +420,11 @@ def load_feed(url, label, topic, is_google):
 
 
 @app.get("/api/news")
-async def news(country: str = "BD", sources: str = "", topics: str = "", limit: int = 15):
+async def news(country: str = "BD", sources: str = "", topics: str = "", limit: int = 40):
     cc = country.upper() if re.fullmatch(r"[A-Za-z]{2}", country) else "BD"
     src = [s for s in dict.fromkeys(x.strip() for x in sources.split(",")) if s in NEWS_SOURCES] or ["bbc", "aljazeera"]
-    tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if t][:4]
-    limit = max(1, min(limit, 30))
+    tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if t][:6]
+    limit = max(1, min(limit, 60))
 
     # Country news is always included; the chosen sources fill the international share
     local_src = ["local"] + (["dailystar"] if cc == "BD" and "dailystar" in src else [])
@@ -433,15 +433,27 @@ async def news(country: str = "BD", sources: str = "", topics: str = "", limit: 
     res = await asyncio.gather(*[asyncio.to_thread(load_feed, *j) for j in local_jobs + intl_jobs])
     local_lists, intl_lists = res[:len(local_jobs)], res[len(local_jobs):]
 
-    seen = set()
+    seen_t, seen_l = [], set()
+
+    def fresh(it):
+        # Same link, or headline sharing >=60% of its words with one already taken = duplicate
+        link = it["link"].split("?")[0]
+        words = {w for w in re.findall(r"\w+", it["title"].lower()) if len(w) > 2}
+        if link in seen_l:
+            return False
+        for w2 in seen_t:
+            if len(words) >= 4 and len(words & w2) / max(1, len(words | w2)) >= 0.6:
+                return False
+        seen_l.add(link)
+        seen_t.append(words)
+        return True
 
     def mix(lists):
         # Round robin so one source does not fill the whole pool
         out = []
         for i in range(max((len(l) for l in lists), default=0)):
             for l in lists:
-                if i < len(l) and l[i]["title"].lower() not in seen:
-                    seen.add(l[i]["title"].lower())
+                if i < len(l) and fresh(l[i]):
                     out.append(l[i])
         return out
 
