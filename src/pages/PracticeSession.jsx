@@ -16,7 +16,7 @@ import { hasGeminiKey } from '../lib/apiKey';
 import { addSession, updateSession, runAnalysis } from '../lib/sessions';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayName } from '../lib/profile';
-import { buildPrompt, buildGreeting } from '../lib/prompts';
+import { buildPrompt, buildGreeting, dayPart } from '../lib/prompts';
 import { callGemini } from '../lib/gemini';
 import useCamera from '../hooks/useCamera';
 import CameraConsent from '../components/CameraConsent';
@@ -166,7 +166,10 @@ export default function PracticeSession() {
         let text = '';
         try {
             if (model) {
-                const who = first ? `Greet me by my first name, ${first}, in one short sentence` : 'Greet me in one short sentence';
+                const part = dayPart();
+                const who = first
+                    ? `Open with a formal greeting such as "Good ${part}, ${first}" in the reply language (never "hello" or "hi")`
+                    : `Open with a formal greeting such as "Good ${part}" in the reply language (never "hello" or "hi")`;
                 text = await withTimeout(callGemini(model, {
                     systemInstruction: { parts: [{ text: systemPrompt }] },
                     contents: [{ role: 'user', parts: [{ text: `The session starts now. ${who}, introduce yourself in your role in one short sentence, then ask your first question. Plain text only, 3 short sentences at most.` }] }],
@@ -180,6 +183,15 @@ export default function PracticeSession() {
         if (!text) text = buildGreeting({ name: userName, language, type: cfg.type, persona: cfg.persona });
     
         setGreeting(text);
+
+        // Save the greeting as the first turn so it shows in History. The 'greeting' flag marks it.
+        liveTurns().push({
+            id: 0, greeting: true, time: Date.now(),
+            userText: '', feedback: '', fillers: [], words: 0,
+            speechSec: 0, shortPauses: 0, longPauses: 0, pauseSec: 0, longestPauseSec: 0,
+            aiText: text,
+        });
+        
         const ok = await playAIResponse(text);
         if (ok) restartListening();
         else setTimeout(restartListening, 1500);   // TTS failed: still let the user talk
@@ -194,7 +206,7 @@ export default function PracticeSession() {
         stopRecording();
         stopTTS();
         
-        if (!live.length) {
+        if (!live.some((t) => !t.greeting)) {
             setSaveStatus('No speech was recorded, so there is no report this time.');
             setTimeout(() => setSaveStatus(''), 4000);
             return;
@@ -232,7 +244,7 @@ export default function PracticeSession() {
     const toggleSession = () => {
         if (isSessionActive) {
             const startedAt = startedAtRef.current;
-            const hadTurns = liveTurns().length > 0;
+            const hadTurns = liveTurns().some((t) => !t.greeting);
             endSession();
             if (hadTurns) navigate(`/report/${startedAt}`);
         } else {

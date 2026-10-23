@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { callGemini, parseJson } from '../lib/gemini';
+import { callGemini, streamGemini, parseJson } from '../lib/gemini';
 import { getGeminiKey } from '../lib/apiKey';
 import { measureAudio } from '../lib/audioStats';
 
@@ -82,11 +82,27 @@ export default function useGeminiLive(model, systemPrompt) {
     const fastReply = async (turn, base64Audio, playTTS, restartMic) => {
         setIsThinking(true);
         const userEntry = { role: 'user', parts: [{ inlineData: { mimeType: 'audio/webm', data: base64Audio } }], turnId: turn.id };
+
+        let firstSpeech = null;   // TTS promise of the first sentence
+        let spoken = '';          // text already sent to TTS
+
         try {
-            const text = await callGemini(modelRef.current, {
+            const text = await streamGemini(modelRef.current, {
                 systemInstruction: { parts: [{ text: promptRef.current }] },
                 contents: [...apiHistory.current, userEntry].map(({ role, parts }) => ({ role, parts })),
+            }, (partial) => {
+                setCaption(partial);      // live caption
+                setIsThinking(false);     // the first words have arrived
+                if (!firstSpeech) {
+                    // First complete sentence (at least 15 chars, ends with . ! ? or the Bengali danda)
+                    const m = partial.match(/^([\s\S]{15,}?[.!?।])\s/);
+                    if (m) {
+                        spoken = m[1].trim();
+                        firstSpeech = playTTS(spoken);   // start speaking while the rest is still streaming
+                    }
+                }
             });
+
             turn.aiText = text;
             apiHistory.current.push(userEntry, { role: 'model', parts: [{ text }] });
             setCaption(text);
@@ -94,7 +110,15 @@ export default function useGeminiLive(model, systemPrompt) {
             fastBusy.current = false;
             pump();                                  // transcription starts now, while TTS plays
 
-            const ok = await playTTS(text);
+            let ok;
+            if (firstSpeech) {
+                ok = await firstSpeech;
+                const rest = text.slice(spoken.length).trim();
+                if (ok && rest) ok = await playTTS(rest);   // the remaining sentences in one go
+            } else {
+                ok = await playTTS(text);            // one short sentence: speak everything now
+            }
+
             if (restartMic) {
                 if (ok) restartMic();
                 else setTimeout(restartMic, 2000);

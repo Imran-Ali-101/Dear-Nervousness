@@ -63,3 +63,72 @@ export function parseJson(raw) {
     return {};
   }
 }
+
+// Reduce thinking time: live replies need little reasoning
+const thinkingFor = (model) => {
+  if (/gemini-3/.test(model)) return { thinkingLevel: 'low' };
+  if (/gemini-2\.5-flash/.test(model)) return { thinkingBudget: 0 };
+  return null;
+};
+
+// Streaming version of callGemini. onText(fullTextSoFar) is called whenever new text arrives.
+// Returns the final text. If streaming fails before any text arrives, it falls back to callGemini.
+export async function streamGemini(model, body, onText) {
+  let acc = '';
+  const thinking = thinkingFor(model);
+  const payload = thinking
+    ? { ...body, generationConfig: { ...body.generationConfig, thinkingConfig: thinking } }
+    : body;
+
+  const ctrl = new AbortController();
+  let timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${API}/${model}:streamGenerateContent?alt=sse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getGeminiKey() },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // A stalled stream must not hang forever: reset the timer on every chunk
+      clearTimeout(timer);
+      timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();   // the last line may be incomplete
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const json = line.slice(5).trim();
+        if (!json) continue;
+        try {
+          const d = JSON.parse(json);
+          const t = d.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+          if (t) {
+            acc += t;
+            onText(acc);
+          }
+        } catch { /* ignore a broken chunk */ }
+      }
+    }
+  } catch (err) {
+    console.error('Streaming failed:', err);
+    // Nothing received yet: use the normal request (it has retries and the quota popup)
+    if (!acc) return callGemini(model, body);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const final = acc.trim();
+  return final || callGemini(model, body);
+}

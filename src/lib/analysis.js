@@ -45,7 +45,8 @@ export async function analyzeSession({ model, language, turns }) {
   const prompt = `You are a speaking coach. Evaluate ONLY the User's lines in this ${lang} practice conversation.
 Return ONLY JSON: {"confidence":0-100,"clarity":0-100,"grammar":0-100,"summary":"2 short sentences","tips":["tip","tip","tip"],"improvements":[{"original":"exact phrase the User said","better":"a clearer, more professional, more concise version","why":"very short reason"}],"vocab":[{"weak":"a weak or repeated word the User used","better":["stronger word","stronger word"]}]}
 Rules: "improvements" has at most 3 items, each "original" must be copied exactly from a User line. "vocab" has at most 3 items. If there is nothing worth improving, return empty arrays. Write summary, tips and "why" in ${lang}. Write "better" in ${lang}.
-
+ Also suggest formal, professional alternatives for casual words and phrases the User used (for example hello, okay, yeah, gonna, kind of, a lot of): put them in "improvements" or "vocab".
+ 
 ${convo}`;
 
   try {
