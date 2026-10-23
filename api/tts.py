@@ -424,7 +424,7 @@ async def news(country: str = "BD", sources: str = "", topics: str = "", limit: 
     cc = country.upper() if re.fullmatch(r"[A-Za-z]{2}", country) else "BD"
     src = [s for s in dict.fromkeys(x.strip() for x in sources.split(",")) if s in NEWS_SOURCES] or ["bbc", "aljazeera"]
     tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if t][:6]
-    limit = max(1, min(limit, 60))
+    limit = max(1, min(limit, 80))
 
     # Country news is always included; the chosen sources fill the international share
     local_src = ["local"] + (["dailystar"] if cc == "BD" and "dailystar" in src else [])
