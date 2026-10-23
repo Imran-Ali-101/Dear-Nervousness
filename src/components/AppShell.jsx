@@ -5,13 +5,13 @@ import Avatar from './Avatar';
 import DeletionBanner from './DeletionBanner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faHouse, faBullseye, faLanguage, faClockRotateLeft, faEllipsis, faSeedling,
+  faHouse, faTrophy, faLanguage, faClockRotateLeft, faEllipsis, faSeedling,
   faGear, faCircleQuestion, faRightFromBracket,
 } from '@fortawesome/free-solid-svg-icons';
 
 const TABS = [
   { to: '/dashboard', label: 'Home', icon: faHouse, end: true },
-  { to: '/warmup', label: 'Practice', icon: faBullseye },
+  { to: '/game', label: 'Game', icon: faTrophy },
   { to: '/info/learning', label: 'Learning', icon: faLanguage },
   { to: '/history', label: 'History', icon: faClockRotateLeft },
   { to: '/more', label: 'More', icon: faEllipsis },

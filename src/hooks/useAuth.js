@@ -14,7 +14,10 @@ export function AuthProvider({ children }) {
     setUserScope(data.session?.user?.id);
     setSession(data.session);
     setLoading(false);
-    if (data.session) syncSessions();
+    if (data.session) {
+        syncSessions();
+        syncGame();
+    }
   });
   const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
     setUserScope(s?.user?.id);

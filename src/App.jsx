@@ -15,6 +15,9 @@ import Settings from './pages/Settings';
 import Account from './pages/Account';
 import QuotaDialog from './components/QuotaDialog';
 import Report from './pages/Report';
+import Game from './pages/Game';
+import GameResult from './pages/GameResult';
+
 
 // Full-screen pages (no tabs) replay the enter animation when they mount
 const Page = ({ children }) => <div className="anim-page">{children}</div>;
@@ -35,6 +38,7 @@ function App() {
                 {/* Pages with the tab navigation */}
                 <Route element={<AppShell />}>
                   <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/game" element={<Game />} />
                   <Route path="/history" element={<History />} />
                   <Route path="/more" element={<More />} />
                   <Route path="/info/:slug" element={<Info />} />
@@ -42,6 +46,7 @@ function App() {
     
                 {/* Full-screen pages */}
                 <Route path="/onboarding" element={<Page><Onboarding /></Page>} />
+                <Route path="/game/result/:startedAt" element={<Page><GameResult /></Page>} />
                 <Route path="/warmup" element={<Page><TongueTwister /></Page>} />
                 <Route path="/practice" element={<Page><PracticeSession /></Page>} />
                 <Route path="/report/:startedAt" element={<Page><Report /></Page>} />

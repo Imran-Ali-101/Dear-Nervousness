@@ -23,6 +23,7 @@ import CameraConsent from '../components/CameraConsent';
 import { hasCameraConsent, giveCameraConsent } from '../lib/cameraConsent';
 import useFaceAnalysis from '../hooks/useFaceAnalysis';
 import FaceLoadingDialog from '../components/FaceLoadingDialog';
+import { finishGame } from '../lib/game';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -234,6 +235,7 @@ export default function PracticeSession() {
             await flush();
             const turns = snapshot();
             updateSession(startedAt, { turns });
+            if (cfg.game) await finishGame({ startedAt, game: cfg.game, model, turns });
             await runAnalysis(startedAt, { model, language, turns, visual });
         })();
     };
@@ -246,7 +248,7 @@ export default function PracticeSession() {
             const startedAt = startedAtRef.current;
             const hadTurns = liveTurns().some((t) => !t.greeting);
             endSession();
-            if (hadTurns) navigate(`/report/${startedAt}`);
+            if (hadTurns) navigate(cfg.game ? `/game/result/${startedAt}` : `/report/${startedAt}`);
         } else {
             resetFace();
             // Each user needs their own Gemini key
