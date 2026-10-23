@@ -24,6 +24,7 @@ import { hasCameraConsent, giveCameraConsent } from '../lib/cameraConsent';
 import useFaceAnalysis from '../hooks/useFaceAnalysis';
 import FaceLoadingDialog from '../components/FaceLoadingDialog';
 import { finishGame } from '../lib/game';
+import NewsCard from '../components/NewsCard';
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 const fmt = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -401,6 +402,8 @@ export default function PracticeSession() {
                     </div>
                 </div>
             </header>
+
+            {cfg.news && <NewsCard news={cfg.news} />}
 
             {/* Body */}
             <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col p-3 md:p-6">

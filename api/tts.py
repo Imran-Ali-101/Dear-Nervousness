@@ -20,6 +20,14 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+import asyncio
+import hashlib
+import html as html_lib
+import json
+import urllib.request
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -321,4 +329,113 @@ async def speak(
         content=audio_data,
         media_type="audio/mpeg",
         headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+    # ---------------------------------------------------------------------------
+# News: live RSS, nothing is stored anywhere (Vercel edge caches the response)
+# ---------------------------------------------------------------------------
+
+NEWS_SOURCES = {"bbc", "aljazeera", "dailystar", "local"}
+BBC_FEEDS = {
+    "world": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "sport": "https://feeds.bbci.co.uk/sport/rss.xml",
+    "politics": "https://feeds.bbci.co.uk/news/politics/rss.xml",
+    "business": "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "technology": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "health": "https://feeds.bbci.co.uk/news/health/rss.xml",
+    "science": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    "entertainment": "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml",
+}
+AJ_FEED = "https://www.aljazeera.com/xml/rss/all.xml"
+TAG_RE = re.compile(r"<[^>]+>")
+
+
+def google_news(q: str, cc: str) -> str:
+    return f"https://news.google.com/rss/search?q={quote(q + ' when:2d')}&hl=en&gl={cc}&ceid={cc}:en"
+
+
+def news_jobs(sources, topics, cc):
+    """(url, source label, topic, is_google) for every feed to read."""
+    jobs = []
+    for src in sources:
+        if src == "bbc":
+            for t in topics or ["world"]:
+                url = BBC_FEEDS.get(t.lower())
+                jobs.append((url or google_news(f"{t} site:bbc.com", cc), "BBC", t, not url))
+        elif src == "aljazeera":
+            jobs.append((AJ_FEED, "Al Jazeera", "", False))
+            for t in topics:
+                jobs.append((google_news(f"{t} site:aljazeera.com", cc), "Al Jazeera", t, True))
+        elif src == "dailystar":
+            for t in topics or [""]:
+                jobs.append((google_news(f"{t} site:thedailystar.net".strip(), cc), "The Daily Star", t, True))
+        elif src == "local":
+            if topics:
+                for t in topics:
+                    jobs.append((google_news(t, cc), "", t, True))
+            else:
+                jobs.append((f"https://news.google.com/rss?hl=en&gl={cc}&ceid={cc}:en", "", "", True))
+    return jobs
+
+
+def clean_text(text, limit):
+    text = html_lib.unescape(TAG_RE.sub(" ", text or ""))
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
+def load_feed(url, label, topic, is_google):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (DearNervousness news)"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            root = ET.fromstring(r.read(2_000_000))
+    except Exception:
+        return []
+    out = []
+    for it in root.iter("item"):
+        title = clean_text(it.findtext("title"), 200)
+        link = (it.findtext("link") or "").strip()
+        if not title or not link.startswith("http"):
+            continue
+        el = it.find("source")
+        source = label or (el.text if el is not None and el.text else "News")
+        if el is not None and el.text and title.endswith(" - " + el.text):
+            title = title[: -len(el.text) - 3]
+        try:
+            ts = parsedate_to_datetime(it.findtext("pubDate")).timestamp()
+        except Exception:
+            ts = 0
+        out.append({
+            "id": hashlib.sha1(link.encode()).hexdigest()[:10],
+            "title": title,
+            # Google News descriptions only repeat the headline, so skip them
+            "summary": "" if is_google else clean_text(it.findtext("description"), 400),
+            "link": link, "source": source, "topic": topic, "ts": ts,
+        })
+    out.sort(key=lambda x: -x["ts"])
+    return out
+
+
+@app.get("/api/news")
+async def news(country: str = "BD", sources: str = "", topics: str = "", limit: int = 15):
+    cc = country.upper() if re.fullmatch(r"[A-Za-z]{2}", country) else "BD"
+    src = [s for s in dict.fromkeys(x.strip() for x in sources.split(",")) if s in NEWS_SOURCES] or ["bbc", "aljazeera"]
+    tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if x.strip()][:4]
+    limit = max(1, min(limit, 30))
+
+    lists = await asyncio.gather(*[asyncio.to_thread(load_feed, *j) for j in news_jobs(src, tops, cc)])
+
+    # Mix the feeds (round robin) so one source does not fill the whole list
+    items, seen = [], set()
+    for i in range(max((len(l) for l in lists), default=0)):
+        for l in lists:
+            if i < len(l) and l[i]["title"].lower() not in seen:
+                seen.add(l[i]["title"].lower())
+                items.append(l[i])
+    items = items[:limit]
+
+    return Response(
+        content=json.dumps(items),
+        media_type="application/json",
+        headers={"Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600"},
     )

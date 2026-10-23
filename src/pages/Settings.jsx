@@ -11,6 +11,7 @@ import { getGeneralPrompt, setGeneralPrompt, DEFAULT_GENERAL_PROMPT } from '../l
 import { getTheme, setTheme, getDefaultLang, setDefaultLang } from '../lib/prefs';
 import { useAuth } from '../hooks/useAuth';
 import { requestDeletion, cancelDeletion, getDeletionDate, DELETE_AFTER_DAYS } from '../lib/deletion';
+import NewsSettings from '../components/NewsSettings';
 
 // Cheap request that fails if the key is invalid
 async function verifyKey(key) {
@@ -245,6 +246,8 @@ export default function Settings() {
             onChange={(v) => { setLang(v); setDefaultLang(v); }}
           />
         </Block>
+
+        <NewsSettings />
 
         <Row icon={faCircleQuestion} title="Help & Support" onClick={() => navigate('/info/help')} />
         <Row icon={faCircleInfo} title="About App" onClick={() => navigate('/info/about')} />

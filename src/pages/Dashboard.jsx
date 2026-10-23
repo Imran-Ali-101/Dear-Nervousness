@@ -14,6 +14,7 @@ import { hasGeminiKey } from '../lib/apiKey';
 import { getStreak, practicedToday, useSessions } from '../lib/sessions';
 import { buildStats } from '../lib/stats';
 import { getDefaultLang } from '../lib/prefs';
+import NewsBox from '../components/NewsBox';
 
 const TONES = {
   green: 'border-emerald-100 bg-emerald-50 text-emerald-700',
@@ -121,6 +122,8 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      <NewsBox />
 
       {!hasKey && (
         <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center">

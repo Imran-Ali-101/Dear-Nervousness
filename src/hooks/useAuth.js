@@ -2,6 +2,7 @@ import { createContext, createElement, useContext, useEffect, useState } from 'r
 import { supabase } from '../lib/supabase';
 import { setUserScope } from '../lib/userScope';
 import { syncSessions } from '../lib/sessions';
+import { syncNews } from '../lib/news';
 
 const AuthContext = createContext({ session: null, user: null, loading: true, signOut: async () => {} });
 
@@ -17,6 +18,7 @@ export function AuthProvider({ children }) {
     if (data.session) {
         syncSessions();
         syncGame();
+        syncNews();
     }
   });
   const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
