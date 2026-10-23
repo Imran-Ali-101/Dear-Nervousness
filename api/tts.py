@@ -332,7 +332,7 @@ async def speak(
     )
 
 
-    # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # News: live RSS, nothing is stored anywhere (Vercel edge caches the response)
 # ---------------------------------------------------------------------------
 
@@ -348,6 +348,9 @@ BBC_FEEDS = {
     "entertainment": "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml",
 }
 AJ_FEED = "https://www.aljazeera.com/xml/rss/all.xml"
+CC_NAMES = {"BD": "Bangladesh", "US": "United States", "GB": "United Kingdom", "IN": "India", "PK": "Pakistan",
+            "AU": "Australia", "CA": "Canada", "SA": "Saudi Arabia", "AE": "UAE", "MY": "Malaysia", "SG": "Singapore"}
+LOCAL_RATIO = 2  # local stories per 1 international story
 TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -373,7 +376,7 @@ def news_jobs(sources, topics, cc):
         elif src == "local":
             if topics:
                 for t in topics:
-                    jobs.append((google_news(t, cc), "", t, True))
+                    jobs.append((google_news(f"{t} {CC_NAMES.get(cc, '')}".strip(), cc), "", t, True))
             else:
                 jobs.append((f"https://news.google.com/rss?hl=en&gl={cc}&ceid={cc}:en", "", "", True))
     return jobs
@@ -423,15 +426,35 @@ async def news(country: str = "BD", sources: str = "", topics: str = "", limit: 
     tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if t][:4]
     limit = max(1, min(limit, 30))
 
-    lists = await asyncio.gather(*[asyncio.to_thread(load_feed, *j) for j in news_jobs(src, tops, cc)])
+    # Country news is always included; the chosen sources fill the international share
+    local_src = ["local"] + (["dailystar"] if cc == "BD" and "dailystar" in src else [])
+    intl_src = [x for x in src if x not in local_src]
+    local_jobs, intl_jobs = news_jobs(local_src, tops, cc), news_jobs(intl_src, tops, cc)
+    res = await asyncio.gather(*[asyncio.to_thread(load_feed, *j) for j in local_jobs + intl_jobs])
+    local_lists, intl_lists = res[:len(local_jobs)], res[len(local_jobs):]
 
-    # Mix the feeds (round robin) so one source does not fill the whole list
-    items, seen = [], set()
-    for i in range(max((len(l) for l in lists), default=0)):
-        for l in lists:
-            if i < len(l) and l[i]["title"].lower() not in seen:
-                seen.add(l[i]["title"].lower())
-                items.append(l[i])
+    seen = set()
+
+    def mix(lists):
+        # Round robin so one source does not fill the whole pool
+        out = []
+        for i in range(max((len(l) for l in lists), default=0)):
+            for l in lists:
+                if i < len(l) and l[i]["title"].lower() not in seen:
+                    seen.add(l[i]["title"].lower())
+                    out.append(l[i])
+        return out
+
+    local, intl = mix(local_lists), mix(intl_lists)
+    items = []
+    while (local or intl) and len(items) < limit:
+        for _ in range(LOCAL_RATIO):
+            if local:
+                items.append(local.pop(0))
+        if intl:
+            items.append(intl.pop(0))
+        elif not local:
+            break
     items = items[:limit]
 
     return Response(
