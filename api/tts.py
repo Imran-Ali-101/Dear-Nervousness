@@ -420,7 +420,7 @@ def load_feed(url, label, topic, is_google):
 async def news(country: str = "BD", sources: str = "", topics: str = "", limit: int = 15):
     cc = country.upper() if re.fullmatch(r"[A-Za-z]{2}", country) else "BD"
     src = [s for s in dict.fromkeys(x.strip() for x in sources.split(",")) if s in NEWS_SOURCES] or ["bbc", "aljazeera"]
-    tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if x.strip()][:4]
+    tops = [t[:40] for t in dict.fromkeys(x.strip() for x in topics.split(",")) if t][:4]
     limit = max(1, min(limit, 30))
 
     lists = await asyncio.gather(*[asyncio.to_thread(load_feed, *j) for j in news_jobs(src, tops, cc)])
