@@ -29,12 +29,12 @@ export default function History() {
             <section key={s.startedAt} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
               <button onClick={() => setOpen(isOpen ? null : s.startedAt)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-gray-900">
-                    {TYPES.find((t) => t.value === s.type)?.title || 'Practice'} · {s.language === 'bn' ? 'Bengali' : 'English'}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(s.startedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </p>
+                    <p className="truncate text-sm font-bold text-gray-900">
+                      {s.news?.title || `${TYPES.find((t) => t.value === s.type)?.title || 'Practice'} · ${s.language === 'bn' ? 'Bengali' : 'English'}`}
+                    </p>
+                    <p className="truncate text-xs text-gray-400">
+                      {s.news ? 'Daily News · ' : ''}{new Date(s.startedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </p>
                 </div>
                 {s.analysis?.confidence != null && (
                   <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{s.analysis.confidence}%</span>

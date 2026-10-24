@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faNewspaper, faArrowUpRightFromSquare, faCommentDots, faGear, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+import { faNewspaper, faArrowUpRightFromSquare, faPhone, faCircleCheck, faGear, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+import { useSessions } from '../lib/sessions';
 import { useNewsPrefs, fetchNews, newsConfig } from '../lib/news';
 import { hasGeminiKey } from '../lib/apiKey';
 
@@ -11,6 +12,7 @@ export default function NewsBox() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(false);
   const [tick, setTick] = useState(0);
+  const done = new Set(useSessions().map((s) => s.news?.id).filter(Boolean));
   const key = JSON.stringify([prefs.country, prefs.sources, prefs.topics, prefs.custom]);
 
   useEffect(() => {
@@ -74,9 +76,16 @@ export default function NewsBox() {
                   {n.source}{n.topic ? ` · ${n.topic}` : ''}
                 </p>
                 <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-gray-900">{n.title}</p>
-                <a href={n.link} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600">
-                  <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-[10px]" /> Read
-                </a>
+                <div className="mt-1 flex items-center gap-3">
+                      <a href={n.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600">
+                        <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-[10px]" /> Read
+                      </a>
+                      {done.has(n.id) && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                          <FontAwesomeIcon icon={faCircleCheck} className="text-[10px]" /> Completed
+                        </span>
+                      )}
+                </div>
               </div>
               <button
                 onClick={() => start(n)}
@@ -84,7 +93,7 @@ export default function NewsBox() {
                 title="Discuss with AI"
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-md shadow-blue-600/25 hover:bg-blue-700"
               >
-                <FontAwesomeIcon icon={faCommentDots} />
+                <FontAwesomeIcon icon={faPhone} />
               </button>
             </li>
           ))}

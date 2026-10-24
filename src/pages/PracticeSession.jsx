@@ -225,6 +225,7 @@ export default function PracticeSession() {
             type: cfg.type,
             persona: cfg.persona,
             level: cfg.level,
+            ...(cfg.news ? { news: { id: cfg.news.id, title: cfg.news.title } } : {}),
             turns: snapshot(),
         });
         if (visual) updateSession(startedAt, { analysis: { visual } });

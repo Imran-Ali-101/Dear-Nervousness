@@ -72,7 +72,7 @@ const short = (s, n) => String(s || '').replace(/\s+/g, ' ').slice(0, n);
 
 // Setup passed to /practice (same way the game does it)
 export const newsConfig = (item) => {
-  const news = { title: short(item.title, 200), summary: short(item.summary, 400), source: short(item.source, 60), link: item.link };
+  const news = { id: item.id, title: short(item.title, 200), summary: short(item.summary, 400), source: short(item.source, 60), link: item.link };
   return {
     language: 'en',
     type: 'speaking',

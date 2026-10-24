@@ -30,7 +30,7 @@ const write = (list) => {
 };
 
 // ---- Supabase sync (localStorage stays as a fast cache) ----
-const COLS = 'started_at,duration_sec,language,type,persona,level,analysis,turns';
+const COLS = 'started_at,duration_sec,language,type,persona,level,analysis,turns,news';
 
 const toRow = (s) => ({
   user_id: currentUserId(),
@@ -42,6 +42,7 @@ const toRow = (s) => ({
   level: s.level ?? null,
   analysis: s.analysis ?? null,
   turns: s.turns ?? null,
+  news: s.news ?? null,
 });
 
 const fromRow = (r) => ({
@@ -53,6 +54,7 @@ const fromRow = (r) => ({
   level: r.level,
   ...(r.analysis ? { analysis: r.analysis } : {}),
   ...(r.turns ? { turns: r.turns } : {}),
+  ...(r.news ? { news: r.news } : {}),
 });
 
 // Save one session to the database (fire and forget; the local copy is already saved)
