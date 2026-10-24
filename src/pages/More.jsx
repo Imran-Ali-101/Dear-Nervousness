@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faGear, faLanguage, faMicrophoneLines, faToolbox, faBook, faShieldHalved,
-  faFileContract, faChevronRight, faCircleInfo, faCircleQuestion,
+  faFileContract, faChevronRight, faCircleInfo, faCircleQuestion, faCompass,
 } from '@fortawesome/free-solid-svg-icons';
 
 const SERVICES = [
@@ -11,6 +11,7 @@ const SERVICES = [
   { icon: faGear, label: 'Settings', sub: 'API key, prompts', to: '/settings' },
 ];
 const LEGAL = [
+  { icon: faCompass, label: 'App Guide', sub: 'A quick tour of every page', to: '/onboarding' },
   { icon: faBook, label: 'User Manual', to: '/info/manual' },
   { icon: faCircleQuestion, label: 'Help & Support', to: '/info/help' },
   { icon: faShieldHalved, label: 'Privacy Policy', to: '/info/privacy' },

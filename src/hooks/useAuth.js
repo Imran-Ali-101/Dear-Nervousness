@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { setUserScope } from '../lib/userScope';
 import { syncSessions } from '../lib/sessions';
 import { syncNews } from '../lib/news';
+import { syncGame } from '../lib/game';
 
 const AuthContext = createContext({ session: null, user: null, loading: true, signOut: async () => {} });
 

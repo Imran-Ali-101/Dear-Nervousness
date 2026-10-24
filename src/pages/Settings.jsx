@@ -203,6 +203,10 @@ export default function Settings() {
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline">
             Get a free key from Google AI Studio <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-xs" />
           </a>
+          <br />
+          <a href="https://www.google.com/search?q=How+to+get+a+free+google+ai+studio+api+key+video" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline">
+            Watch: how to get a free API key <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-xs" />
+          </a>
 
           <div className="mt-5 flex items-start gap-3 rounded-xl bg-gray-50 p-4 text-xs leading-relaxed text-gray-500">
             <FontAwesomeIcon icon={faShieldHalved} className="mt-0.5 text-gray-400" />

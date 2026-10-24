@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { seenOnboarding } from '../lib/onboarding';
 
 export function Splash() {
   return (
@@ -15,5 +16,7 @@ export default function RequireAuth() {
   const location = useLocation();
   if (loading) return <Splash />;
   if (!session) return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  // First visit to the dashboard on this device: show the quick guide once
+  if (location.pathname === '/dashboard' && !seenOnboarding()) return <Navigate to="/onboarding" replace />;
   return <Outlet />;
 }
