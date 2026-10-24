@@ -257,9 +257,9 @@ export default function Dashboard() {
                 {stats.past.map((s) => (
                   <li key={s.startedAt} className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-800">{TYPES.find((t) => t.value === s.type)?.title || 'Practice'}</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(s.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {fmtDur(s.durationSec)}
+                      <p className="truncate text-sm font-semibold text-gray-800">{s.news?.title || TYPES.find((t) => t.value === s.type)?.title || 'Practice'}</p>
+                      <p className="truncate text-xs text-gray-400">
+                          {s.news ? 'Daily News · ' : ''}{new Date(s.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {fmtDur(s.durationSec)}
                       </p>
                     </div>
                     {s.analysis?.confidence != null && (
