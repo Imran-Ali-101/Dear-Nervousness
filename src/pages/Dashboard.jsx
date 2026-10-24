@@ -26,7 +26,7 @@ const TEXTAREA = 'mt-2 w-full resize-none rounded-xl border border-gray-200 bg-w
 
 function Panel({ n, color, title, subtitle, children }) {
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <section className="min-w-0 rounded-2xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white p-4">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-white ${color}`}>{n}</span>
         <div className="min-w-0">
@@ -136,7 +136,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-3">
         {/* 1. Setup */}
         <Panel n="1" color="bg-blue-600" title="Interview & Speaking" subtitle="Choose language, type and settings">
           <p className="mb-2 text-sm font-semibold text-gray-700">Language</p>
