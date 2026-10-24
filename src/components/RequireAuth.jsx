@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { logVisit } from '../lib/visits';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { seenOnboarding } from '../lib/onboarding';
@@ -14,6 +16,10 @@ export function Splash() {
 export default function RequireAuth() {
   const { session, loading } = useAuth();
   const location = useLocation();
+  
+  const uid = session?.user?.id;
+  useEffect(() => { if (uid) logVisit(); }, [uid]);
+  
   if (loading) return <Splash />;
   if (!session) return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   // First visit to the dashboard on this device: show the quick guide once

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faGithub } from '@fortawesome/free-brands-svg-icons';
@@ -17,7 +17,9 @@ const friendlyError = (msg = '') => {
   const m = msg.toLowerCase();
   if (m.includes('rate limit')) return 'Too many attempts. Please wait a while and try again.';
   if (m.includes('provider is not enabled')) return 'This sign-in method is not available right now.';
-  return msg || 'Something went wrong. Please try again.';
+  if (m.includes('failed to fetch') || m.includes('network')) return 'Network problem. Please check your connection.';
+  if (m.includes('access_denied') || m.includes('cancel')) return 'Sign-in was cancelled. Please try again.';
+  return 'Something went wrong. Please try again later.';
 };
 
 export default function Auth() {
@@ -25,6 +27,7 @@ export default function Auth() {
   const location = useLocation();
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const onGoogleError = useCallback((m) => setError(friendlyError(m)), []);
 
   if (loading) return <Splash />;
   if (session) return <Navigate to={location.state?.from || '/dashboard'} replace />;
@@ -60,7 +63,7 @@ export default function Auth() {
           <div className="mt-5 space-y-2">
             <GoogleButton
               text="continue_with"
-              onError={setError}
+              onError={onGoogleError}
               fallback={
                 <button type="button" onClick={() => oauth('google')} disabled={!!busyId}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60">

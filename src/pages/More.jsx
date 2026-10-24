@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { fetchSiteStats } from '../lib/visits';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -18,6 +20,37 @@ const LEGAL = [
   { icon: faFileContract, label: 'Terms & Conditions', to: '/info/terms' },
   { icon: faCircleInfo, label: 'About App', to: '/info/about' },
 ];
+
+const STATS = [
+  ['Unique Visitors Today', 'unique_today'],
+  ['Total Visits Today', 'visits_today'],
+  ['Visits, Last 30 Days', 'visits_30d'],
+  ['Registered Users', 'users'],
+];
+
+function SiteStats() {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let on = true;
+    fetchSiteStats().then((d) => on && setData(d)).catch(() => on && setFailed(true));
+    return () => { on = false; };
+  }, []);
+  if (failed) return null;
+  return (
+    <>
+      <Title>Platform Statistics</Title>
+      <div className="grid grid-cols-2 gap-3">
+        {STATS.map(([label, key]) => (
+          <div key={key} className="min-w-0 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <p className="text-2xl font-bold text-gray-900">{data ? Number(data[key] ?? 0).toLocaleString() : '—'}</p>
+            <p className="mt-1 text-xs font-medium text-gray-500">{label}</p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
 function Row({ item, onClick }) {
   return (
@@ -54,6 +87,7 @@ export default function More() {
 
       <Title>Help & Legal</Title>
       <Card>{LEGAL.map((i) => <Row key={i.label} item={i} onClick={() => navigate(i.to)} />)}</Card>
+      <SiteStats />
     </main>
   );
 }

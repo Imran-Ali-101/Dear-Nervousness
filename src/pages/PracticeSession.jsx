@@ -423,7 +423,7 @@ export default function PracticeSession() {
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-gray-400">
                             <FontAwesomeIcon icon={camStatus === 'starting' ? faSpinner : faCamera} spin={camStatus === 'starting'} className="text-4xl md:text-5xl" />
                             <p className="text-xs font-medium md:text-sm">
-                                {camStatus === 'denied' ? 'Camera access was blocked. Allow it in your browser settings and try again.'
+                                {camStatus === 'denied' ? 'Camera access was blocked. Allow it in your browser settings and try again or go to help & support'
                                     : camStatus === 'error' ? 'Could not start the camera on this device.'
                                     : 'The camera is optional. Turn it on to get presence scores.'}
                             </p>
